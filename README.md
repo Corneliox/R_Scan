@@ -1,4 +1,4 @@
-﻿# RSscan Plantar Pressure & Dynamic Gait Analysis Pipeline
+# RSscan Plantar Pressure & Dynamic Gait Analysis Pipeline
 
 A comprehensive MATLAB data processing pipeline for dynamic plantar pressure, ground reaction force (GRF), and center of pressure (COP) gait analysis based on **RSscan footscan®** pressure plate measurements.
 
@@ -122,9 +122,26 @@ The pipeline geometrically divides each foot into 12 functional zones:
 │       ├── 5_foot/
 │       └── 6_group/
 │
+├── main_rscan_pipeline.m                   # Unified Master Pipeline Entrypoint
+├── src/                                    # Modular stage functions & geometry helpers
+│   ├── resolve_output_dir.m                # Smart output directory resolution & fallback
+│   ├── scan_subject_trials.m               # Dynamic N-trial detection per subject
+│   ├── stage1_extract_3d_cop.m             # Stage 1: 3D matrix & COP extraction
+│   ├── stage2_segment_12boxes.m            # Stage 2: 12-box foot partitioning
+│   ├── stage3_compute_fap.m                # Stage 3: Force, Area, Pressure (101 pts)
+│   ├── stage4_temporal_events.m            # Stage 4: Timing & %BW normalization
+│   ├── stage5_subject_aggregation.m        # Stage 5: N-trial mean & standard deviation
+│   ├── stage6_group_analysis.m             # Stage 6: Arch Index & SPSS matrix export
+│   ├── func_footaxis.m                     # Foot axis helper
+│   ├── func_abcd_in.m                      # Point-in-polygon helper
+│   ├── func_perpendical_point_to_line.m    # Geometric perpendicular projection helper
+│   └── func_box_link.m                     # Interactive box boundary linker
+│
+├── coba rs scan/                           # Legacy reference scripts (preserved)
+├── 20260824_rscop_box_pressure/           # Legacy data & reference (preserved)
 ├── .gitignore
 └── README.md
-`
+```
 
 ---
 
@@ -133,20 +150,28 @@ The pipeline geometrically divides each foot into 12 functional zones:
 ### Prerequisites
 * MATLAB R2018a or newer (compatible with legacy and modern releases).
 
-### Execution
-Run the scripts sequentially in MATLAB:
-`matlab
-% Set MATLAB current folder to 'coba rs scan'
-cd('coba rs scan');
+### Quick Execution
+Run the unified master pipeline directly from MATLAB in the parent directory:
 
-% Run pipeline step by step:
-run('loop1_step_box_MxNxL_20080815.m');
-run('loop2_step_box12_get_xy_20080810.m');
-run('loop3_step_box12_value_20080810.m');
-run('loop4_step_pressure_area_20080826.m');
-run('loop5_foot_pressure_area_20080826.m');
-run('loop6_group_pressure_area_20080826.m');
-`
+```matlab
+% 1. Run full pipeline for all discovered subjects with default settings:
+main_rscan_pipeline();
+
+% 2. Run for specific subject(s) with custom output folder:
+main_rscan_pipeline('subject', {'R_t000', 'L_t000'}, 'output_dir', 'D:\MyOutput');
+
+% 3. Run specific stages (e.g. Stage 1 to 3 only):
+main_rscan_pipeline('stages', 1:3);
+
+% 4. Custom bodyweight normalization (e.g. 75 kg):
+main_rscan_pipeline('bodyweight', 75);
+```
+
+### Smart Output Resolution & Fallback
+The pipeline automatically formats the output folder as `<subject_name>_<YYYYMMDD>`.
+- If the target folder is empty, output is saved directly in `<output_dir>/<subject_name>_<YYYYMMDD>`.
+- If the folder contains previous results or general files, it automatically creates/routes to `<output_dir>/output/<subject_name>_<YYYYMMDD>`.
+- Inside each subject folder, structured stage subfolders (`1_step_level` to `6_group`) are preserved.
 
 ---
 
