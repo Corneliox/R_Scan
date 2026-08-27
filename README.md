@@ -1,4 +1,4 @@
-# RSscan Plantar Pressure & Dynamic Gait Analysis Pipeline
+﻿# RSscan Plantar Pressure & Dynamic Gait Analysis Pipeline
 
 A comprehensive MATLAB data processing pipeline for dynamic plantar pressure, ground reaction force (GRF), and center of pressure (COP) gait analysis based on **RSscan footscan®** pressure plate measurements.
 
@@ -7,11 +7,11 @@ A comprehensive MATLAB data processing pipeline for dynamic plantar pressure, gr
 ## 📌 Overview
 
 This repository provides an automated 6-stage biomechanical analysis pipeline that:
-1. Parses raw RSscan spatio-temporal exports (.xls / .xlsx format).
+1. Parses raw RSscan spatio-temporal exports (`.xls` / `.xlsx` format).
 2. Computes the longitudinal **geometric foot axis** and **Center of Pressure (COP)** trajectory.
 3. Automatically partitions the plantar foot surface into **12 functional anatomical regions (boxes)**.
 4. Normalizes contact timing into a standard **0–100% stance phase** (101 interpolated points).
-5. Aggregates multi-trial measurements (5 walking steps per subject) into representative mean ± SD profiles.
+5. Aggregates multi-trial measurements ($N$ walking steps per subject) into representative mean ± SD profiles.
 6. Classifies subjects by **Arch Index (AI)** into clinical cohorts (*High Arch / Pes Cavus*, *Normal Arch*, *Flatfoot / Pes Planus*) for statistical evaluation (SPSS / ANOVA).
 
 ---
@@ -20,108 +20,89 @@ This repository provides an automated 6-stage biomechanical analysis pipeline th
 
 The pipeline geometrically divides each foot into 12 functional zones:
 
-| Box Index | Anatomical Region | Clinical Abbreviation |
-| :---: | :--- | :--- |
-| **Box 1** | Hallux (Big Toe) | Toe 1 |
-| **Box 2** | Second Toe | Toe 2 |
-| **Box 3** | Third Toe | Toe 3 |
-| **Box 4** | Lesser Toes | Toe 4-5 |
-| **Box 5** | First Metatarsal Head | MT 1 |
-| **Box 6** | Second Metatarsal Head | MT 2 |
-| **Box 7** | Third Metatarsal Head | MT 3 |
-| **Box 8** | Fourth & Fifth Metatarsal Heads | MT 4-5 |
-| **Box 9** | Medial Midfoot | Mid Med |
-| **Box 10** | Lateral Midfoot | Mid Lat |
-| **Box 11** | Medial Heel (Rearfoot) | Heel Med |
-| **Box 12** | Lateral Heel (Rearfoot) | Heel Lat |
+| Box Index | Anatomical Region | Clinical Abbreviation | Description |
+| :---: | :--- | :--- | :--- |
+| **Box 1** | Hallux (Big Toe) | Toe 1 | Medial distal toe |
+| **Box 2** | Second Toe | Toe 2 | Second digital zone |
+| **Box 3** | Third Toe | Toe 3 | Third digital zone |
+| **Box 4** | Lesser Toes | Toe 4-5 | Fourth and fifth digital zones |
+| **Box 5** | First Metatarsal Head | MT 1 | Medial forefoot |
+| **Box 6** | Second Metatarsal Head | MT 2 | Central-medial forefoot |
+| **Box 7** | Third Metatarsal Head | MT 3 | Central-lateral forefoot |
+| **Box 8** | Fourth & Fifth Metatarsal Heads | MT 4-5 | Lateral forefoot |
+| **Box 9** | Medial Midfoot | Mid Med | Medial longitudinal arch |
+| **Box 10** | Lateral Midfoot | Mid Lat | Lateral longitudinal arch |
+| **Box 11** | Medial Heel (Rearfoot) | Heel Med | Medial calcaneus |
+| **Box 12** | Lateral Heel (Rearfoot) | Heel Lat | Lateral calcaneus |
 
 ---
 
 ## 🔄 6-Stage Pipeline Architecture
 
-`
-[ Raw RSscan Exports ]
-         │
-         ▼
-[ loop1: 3D Pressure Matrix & COP Extraction ] ──► map_level_*.mat, map_level_max_*.txt
-         │
-         ▼
-[ loop2: 12-Box Geometric Foot Partitioning ]  ──► xy_box12_*.txt, xy_box12_*.jpg
-         │
-         ▼
-[ loop3: Regional Force, Area & Pressure (101 pts) ] ──► box12_data_101_*.txt
-         │
-         ▼
-[ loop4: Stance Phase Timing & %BW Normalization ] ──► step_start_end_max_peak_*.txt
-         │
-         ▼
-[ loop5: Multi-Step Subject Aggregation (5 Trials) ] ──► foot_fap_mean_*.txt, foot_fap_std_*.txt
-         │
-         ▼
-[ loop6: Cohort Grouping by Arch Index (AI) ] ──► *_box12_group_semp_spss.txt (SPSS)
-`
+```text
+[ Raw RSscan Exports (Dynamic Roll off, COP line, Dynamic Max Image) ]
+                               │
+                               ▼
+     [ Stage 1: 3D Spatio-Temporal Matrix & COP Extraction ]
+        └── Output: map_level_*.mat, map_level_max_*.txt, mn_*.jpg
+                               │
+                               ▼
+     [ Stage 2: 12-Box Geometric Foot Partitioning ]
+        └── Output: xy_box12_*.txt, xy_box12_*.jpg
+                               │
+                               ▼
+     [ Stage 3: Regional Force, Area & Pressure (101 pts) ]
+        └── Output: box12_data_101_*.txt, inbox_value_*.txt, inbox_xy_*.txt
+                               │
+                               ▼
+     [ Stage 4: Stance Phase Timing & %BW Normalization ]
+        └── Output: step_start_end_max_peak_*.txt, data_pressure_*.txt, data_area_*.txt
+                               │
+                               ▼
+     [ Stage 5: Multi-Trial Subject Aggregation (N Steps) ]
+        └── Output: foot_fap_mean_*.txt, foot_fap_std_*.txt, foot_fap_*.jpg
+                               │
+                               ▼
+     [ Stage 6: Cohort Grouping by Arch Index & SPSS Export ]
+        └── Output: *_box12_group_semp_spss.txt, *_box_group.jpg
+```
 
 ### Stage Details
 
-1. **loop1_step_box_MxNxL_20080815.m (Stage 1):**
-   * Parses Dynamic Roll off, Centre of Force line, and Dynamic Maximum Image.
+1. **Stage 1 (`stage1_extract_3d_cop.m`):**
+   * Parses `Dynamic Roll off`, `Centre of Force line`, and `Dynamic Maximum Image`.
    * Standardizes orientation (horizontal flip for right foot) and extracts COP trajectory.
-   * Outputs 3D spatio-temporal array (map_level.mat) and 2D peak pressure matrix (map_level_max.txt).
+   * Outputs 3D spatio-temporal array (`map_level.mat`) and 2D peak pressure matrix (`map_level_max.txt`).
 
-2. **loop2_step_box12_get_xy_20080810.m (Stage 2):**
-   * Uses helper functions unc_footaxis.m and unc_perpendical_point_to_line.m.
-   * Computes the longitudinal axis of the foot and generates 4-point bounding polygons for all 12 regions (xy_box12_*.txt).
+2. **Stage 2 (`stage2_segment_12boxes.m`):**
+   * Uses helper functions `func_footaxis.m` and `func_perpendical_point_to_line.m`.
+   * Computes the longitudinal axis of the foot and generates 4-point bounding polygons for all 12 regions (`xy_box12_*.txt`).
 
-3. **loop3_step_box12_value_20080810.m (Stage 3):**
-   * Uses unc_abcd_in.m to map active sensors into their respective boxes across all frames.
-   * Calculates regional force ($), contact area ($), and pressure ( = F/A$).
+3. **Stage 3 (`stage3_compute_fap.m`):**
+   * Uses `func_abcd_in.m` to map active sensors into their respective boxes across all frames.
+   * Calculates regional force ($F$), contact area ($A$), and pressure ($P = F/A$).
    * Normalizes time to 0–100% stance phase (101 data points).
 
-4. **loop4_step_start_end_20080815.m & loop4_step_pressure_area_20080826.m (Stage 4):**
+4. **Stage 4 (`stage4_temporal_events.m`):**
    * Detects temporal events: Initial Contact (*Start*), Roll-off (*End*), Time-to-Peak (*Max Index*), and Peak Value.
    * Normalizes force relative to subject body weight (%BW).
 
-5. **loop5_foot_froce_20080812.m & loop5_foot_pressure_area_20080826.m (Stage 5):**
-   * Averages 5 repeated trials per subject to compute ensemble mean and standard deviation.
+5. **Stage 5 (`stage5_subject_aggregation.m`):**
+   * Dynamically averages all available trials ($N \ge 1$) per subject to compute ensemble mean and standard deviation.
    * Calculates Force-Time Integral (Impulse).
 
-6. **loop6_group_20080816.m & loop6_group_pressure_area_20080826.m (Stage 6):**
+6. **Stage 6 (`stage6_group_analysis.m`):**
    * Groups subjects into Arch Index categories:
-     - **High Arch (Pes Cavus):**  < 0.21$
-     - **Normal Arch:** .21 \le AI \le 0.26$
-     - **Flatfoot (Pes Planus):**  > 0.26$
+     - **High Arch (Pes Cavus):** $AI < 0.21$
+     - **Normal Arch:** $0.21 \le AI \le 0.26$
+     - **Flatfoot (Pes Planus):** $AI > 0.26$
    * Exports formatted ASCII datasets ready for statistical analysis in SPSS / ANOVA.
 
 ---
 
 ## 📂 Repository Structure
 
-`
-├── coba rs scan/                           # Sequential MATLAB processing scripts
-│   ├── loop1_step_box_MxNxL_20080815.m
-│   ├── loop2_step_box12_get_xy_20080810.m
-│   ├── loop3_step_box12_value_20080810.m
-│   ├── loop4_step_start_end_20080815.m
-│   ├── loop4_step_pressure_area_20080826.m
-│   ├── loop5_foot_froce_20080812.m
-│   ├── loop5_foot_pressure_area_20080826.m
-│   ├── loop6_group_20080816.m
-│   └── loop6_group_pressure_area_20080826.m
-│
-├── 20260824_rscop_box_pressure/           # Geometric functions & shared results
-│   ├── func_footaxis.m                     # Foot axis calculation
-│   ├── func_abcd_in.m                      # Point-in-polygon cell assignment
-│   ├── func_perpendical_point_to_line.m    # Geometric perpendicular projection
-│   ├── func_box_link.m                     # Interactive box boundary linker
-│   ├── rawdata_rs/                         # Raw RSscan tabular exports
-│   └── result/                             # Hierarchical output folders
-│       ├── 1_step_level/
-│       ├── 2_step_get_xy/
-│       ├── 3_step_value/
-│       ├── 4_step_start_end/
-│       ├── 5_foot/
-│       └── 6_group/
-│
+```text
 ├── main_rscan_pipeline.m                   # Unified Master Pipeline Entrypoint
 ├── src/                                    # Modular stage functions & geometry helpers
 │   ├── resolve_output_dir.m                # Smart output directory resolution & fallback
@@ -139,8 +120,8 @@ The pipeline geometrically divides each foot into 12 functional zones:
 │
 ├── coba rs scan/                           # Legacy reference scripts (preserved)
 ├── 20260824_rscop_box_pressure/           # Legacy data & reference (preserved)
-├── .gitignore
-└── README.md
+├── .gitignore                              # Git filter for large raw data (~3.85 GB)
+└── README.md                               # Project documentation
 ```
 
 ---
@@ -151,7 +132,7 @@ The pipeline geometrically divides each foot into 12 functional zones:
 * MATLAB R2018a or newer (compatible with legacy and modern releases).
 
 ### Quick Execution
-Run the unified master pipeline directly from MATLAB in the parent directory:
+Run the unified master pipeline directly from MATLAB in the root directory:
 
 ```matlab
 % 1. Run full pipeline for all discovered subjects with default settings:
