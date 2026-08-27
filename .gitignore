@@ -1,0 +1,44 @@
+# =========================================================================
+# RSscan Foot Pressure Analysis - Gitignore Configuration
+# =========================================================================
+
+# Raw Biomechanical Data & Excel exports (Large files ~3.85 GB)
+**/rawdata_rs/
+rawdata_rs/
+*.xls
+*.xlsx
+
+# Processing Output Folders & Result Matrices
+**/result/
+result/
+**/output/
+output/
+*.mat
+*.txt.bak
+
+# Large Image Exports
+*.tif
+*.tiff
+
+# MATLAB Autosave, Backup & Temporary Files
+*.asv
+*.m~
+*.mat~
+*.tmp
+*.fig~
+
+# MATLAB Project, MEX & Workspace Cache
+*.slxc
+*.mex*
+.SimulinkProject/
+_ReSharper*/
+
+# OS Generated Files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs & Crash Dumps
+*.log
+*.dmp
