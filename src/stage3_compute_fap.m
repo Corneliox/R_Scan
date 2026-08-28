@@ -50,19 +50,26 @@ for w = 1:length(trial_tags)
     for b = 1:num_boxes
         a = box(b, 1:2); b_pt = box(b, 3:4); c = box(b, 5:6); d = box(b, 7:8);
         
-        % First frame to get cell coordinates in box
+        % Identify active cell coordinates inside this bounding box
         [aaaa, ~] = func_abcd_in(matrix_level(:, :, 1), matrix_list, a, b_pt, c, d);
         unit_count = size(aaaa, 1);
         
         value_inbox = zeros(n_frames, max(1, unit_count));
-        for e = 1:n_frames
-            [~, abcd_in] = func_abcd_in(matrix_level(:, :, e), matrix_list, a, b_pt, c, d);
-            if ~isempty(abcd_in)
-                value_inbox(e, 1:length(abcd_in)) = abcd_in;
-                data_f(e, b) = sum(abcd_in);
-                if unit_count > 0
-                    data_p(e, b) = sum(abcd_in) / (unit_count * sensor_cell_area);
+        
+        if unit_count > 0
+            for e = 1:n_frames
+                mat_e = matrix_level(:, :, e);
+                vals = zeros(1, unit_count);
+                for pt_i = 1:unit_count
+                    r = aaaa(pt_i, 2);
+                    c_idx = aaaa(pt_i, 1);
+                    if r >= 1 && r <= n_rows && c_idx >= 1 && c_idx <= n_cols
+                        vals(pt_i) = mat_e(r, c_idx);
+                    end
                 end
+                value_inbox(e, :) = vals;
+                data_f(e, b) = sum(vals);
+                data_p(e, b) = sum(vals) / (unit_count * sensor_cell_area);
             end
         end
         
