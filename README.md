@@ -4,36 +4,70 @@ A comprehensive MATLAB data processing pipeline for dynamic plantar pressure, gr
 
 ---
 
-## 📌 Overview
+## ⚡ Quick Start: Jalankan Aplikasi Utama (GUI)
 
-This repository provides an automated 6-stage biomechanical analysis pipeline that:
-1. Parses raw RSscan spatio-temporal exports (`.xls` / `.xlsx` format).
-2. Computes the longitudinal **geometric foot axis** and **Center of Pressure (COP)** trajectory.
-3. Automatically partitions the plantar foot surface into **12 functional anatomical regions (boxes)**.
-4. Normalizes contact timing into a standard **0–100% stance phase** (101 interpolated points).
-5. Aggregates multi-trial measurements ($N$ walking steps per subject) into representative mean ± SD profiles.
-6. Classifies subjects by **Arch Index (AI)** into clinical cohorts (*High Arch / Pes Cavus*, *Normal Arch*, *Flatfoot / Pes Planus*) for statistical evaluation (SPSS / ANOVA).
+Aplikasi utama yang paling direkomendasikan untuk digunakan sehari-hari adalah **`rscan_gui`**. Cukup buka MATLAB dan jalankan:
+
+```matlab
+% Buka GUI Studio Interaktif
+rscan_gui
+```
+
+Dengan GUI ini, Anda dapat:
+- Memilih folder **Input (Raw Data)** dan **Output** secara visual lewat tombol *Browse*.
+- Memilih subjek tertentu atau seluruh subjek (*Select All*).
+- Menjalankan seluruh tahapan (Tahap 1 s/d 6) hanya dengan satu klik tombol **▶ RUN PIPELINE**.
+- Membuka folder hasil langsung di Windows Explorer setelah analisis selesai.
 
 ---
 
-## 🦶 12 Anatomical Plantar Foot Regions
+## 📌 Overview
 
-The pipeline geometrically divides each foot into 12 functional zones:
+Pipeline biomekanika terintegrasi ini mengotomatiskan 6 tahapan pemrosesan data:
+1. **Tahap 1:** Membaca ekspor matriks spatio-temporal RSscan (`.xls` / `.xlsx`) dan mengekstrak lintasan COP.
+2. **Tahap 2:** Menghitung sumbu geometris telapak kaki (*foot axis*) dan membagi telapak kaki menjadi **12 area anatomis (boxes)**.
+3. **Tahap 3:** Mengekstrak nilai Gaya ($F$), Luas Kontak ($A$), dan Tekanan ($P = F/A$) pada 12 box dengan normalisasi **101 titik (0–100% stance phase)**.
+4. **Tahap 4:** Mendeteksi parameter temporal kontak (*Start*, *End*, *Time-to-Peak*, *Peak Force*) dan normalisasi terhadap berat badan (%BW).
+5. **Tahap 5:** Mengagregasi $N$ langkah uji coba per subjek menjadi kurva Rata-rata (*Mean*) dan Simpangan Baku (*SD*).
+6. **Tahap 6:** Mengelompokkan subjek berdasarkan **Arch Index (AI)** (*High Arch*, *Normal Arch*, *Flatfoot*) dan mengekspor matriks tabel siap uji statistik (SPSS / ANOVA).
 
-| Box Index | Anatomical Region | Clinical Abbreviation | Description |
+---
+
+## 🦶 12 Area Anatomis Telapak Kaki (12 Boxes)
+
+Telapak kaki dibagi secara otomatis ke dalam 12 zona fungsional:
+
+| Box Index | Zona Anatomis | Singkatan | Deskripsi Klinis |
 | :---: | :--- | :--- | :--- |
-| **Box 1** | Hallux (Big Toe) | Toe 1 | Medial distal toe |
-| **Box 2** | Second Toe | Toe 2 | Second digital zone |
-| **Box 3** | Third Toe | Toe 3 | Third digital zone |
-| **Box 4** | Lesser Toes | Toe 4-5 | Fourth and fifth digital zones |
-| **Box 5** | First Metatarsal Head | MT 1 | Medial forefoot |
-| **Box 6** | Second Metatarsal Head | MT 2 | Central-medial forefoot |
-| **Box 7** | Third Metatarsal Head | MT 3 | Central-lateral forefoot |
-| **Box 8** | Fourth & Fifth Metatarsal Heads | MT 4-5 | Lateral forefoot |
-| **Box 9** | Medial Midfoot | Mid Med | Medial longitudinal arch |
-| **Box 10** | Lateral Midfoot | Mid Lat | Lateral longitudinal arch |
-| **Box 11** | Medial Heel (Rearfoot) | Heel Med | Medial calcaneus |
-| **Box 12** | Lateral Heel (Rearfoot) | Heel Lat | Lateral calcaneus |
+| **Box 1** | Hallux (Ibu Jari Kaki) | Toe 1 | Jari kaki medial / jempol |
+| **Box 2** | Jari Kaki Kedua | Toe 2 | Jari telapak kedua |
+| **Box 3** | Jari Kaki Ketiga | Toe 3 | Jari telapak ketiga |
+| **Box 4** | Jari Kaki Keempat & Kelima | Toe 4-5 | Jari-jari kaki lateral |
+| **Box 5** | Metatarsal Head 1 | MT 1 | Kepala metatarsal pertama (medial) |
+| **Box 6** | Metatarsal Head 2 | MT 2 | Kepala metatarsal kedua (sentral-medial) |
+| **Box 7** | Metatarsal Head 3 | MT 3 | Kepala metatarsal ketiga (sentral-lateral) |
+| **Box 8** | Metatarsal Head 4 & 5 | MT 4-5 | Kepala metatarsal lateral |
+| **Box 9** | Midfoot Medial | Mid Med | Lengkung telapak dalam (*Medial Longitudinal Arch*) |
+| **Box 10** | Midfoot Lateral | Mid Lat | Lengkung telapak luar (*Lateral Longitudinal Arch*) |
+| **Box 11** | Tumit Medial (Rearfoot) | Heel Med | Bagian dalam tumit (*Medial Calcaneus*) |
+| **Box 12** | Tumit Lateral (Rearfoot) | Heel Lat | Bagian luar tumit (*Lateral Calcaneus*) |
+
+---
+
+## ⚙️ Parameter Biomekanika: Fungsi Ratio MT
+
+### Apa itu Ratio MT?
+**Ratio MT** (Metatarsal Partition Ratio, default: `30, 20, 20`) adalah parameter proporsi geometris yang digunakan pada **Tahap 2** untuk membagi garis transversal metatarsal (dari medial ke lateral) menjadi 4 zona metatarsal dan 4 zona jari kaki:
+
+* **0% – 30% (Lebar 30%):** Area **Box 5 (MT 1)** dan **Box 1 (Toe 1 / Hallux)** pada sisi medial.
+* **30% – 50% (Lebar 20%):** Area **Box 6 (MT 2)** dan **Box 2 (Toe 2)**.
+* **50% – 70% (Lebar 20%):** Area **Box 7 (MT 3)** dan **Box 3 (Toe 3)**.
+* **70% – 100% (Lebar 30%):** Area **Box 8 (MT 4-5)** dan **Box 4 (Toe 4-5)** pada sisi lateral.
+
+### Mengapa Ratio MT Penting?
+1. **Proporsi Anatomis Manusia:** Kepala metatarsal pertama (MT1) dan metatarsal luar (MT4-5) secara anatomis lebih lebar daripada MT2 dan MT3.
+2. **Standardisasi Otomatis:** Menjamin segmentasi 12 box konsisten pada seluruh subjek tanpa perlu menggambar poligon manual satu per satu pada ratusan data langkah.
+3. **Kustomisasi Klinis:** Jika Anda menganalisis populasi khusus (misalnya kaki diabetes, anak-anak, atau kelainan *hallux valgus*), rasio ini dapat disesuaikan langsung melalui antarmuka GUI.
 
 ---
 
@@ -67,94 +101,58 @@ The pipeline geometrically divides each foot into 12 functional zones:
         └── Output: *_box12_group_semp_spss.txt, *_box_group.jpg
 ```
 
-### Stage Details
-
-1. **Stage 1 (`stage1_extract_3d_cop.m`):**
-   * Parses `Dynamic Roll off`, `Centre of Force line`, and `Dynamic Maximum Image`.
-   * Standardizes orientation (horizontal flip for right foot) and extracts COP trajectory.
-   * Outputs 3D spatio-temporal array (`map_level.mat`) and 2D peak pressure matrix (`map_level_max.txt`).
-
-2. **Stage 2 (`stage2_segment_12boxes.m`):**
-   * Uses helper functions `func_footaxis.m` and `func_perpendical_point_to_line.m`.
-   * Computes the longitudinal axis of the foot and generates 4-point bounding polygons for all 12 regions (`xy_box12_*.txt`).
-
-3. **Stage 3 (`stage3_compute_fap.m`):**
-   * Uses `func_abcd_in.m` to map active sensors into their respective boxes across all frames.
-   * Calculates regional force ($F$), contact area ($A$), and pressure ($P = F/A$).
-   * Normalizes time to 0–100% stance phase (101 data points).
-
-4. **Stage 4 (`stage4_temporal_events.m`):**
-   * Detects temporal events: Initial Contact (*Start*), Roll-off (*End*), Time-to-Peak (*Max Index*), and Peak Value.
-   * Normalizes force relative to subject body weight (%BW).
-
-5. **Stage 5 (`stage5_subject_aggregation.m`):**
-   * Dynamically averages all available trials ($N \ge 1$) per subject to compute ensemble mean and standard deviation.
-   * Calculates Force-Time Integral (Impulse).
-
-6. **Stage 6 (`stage6_group_analysis.m`):**
-   * Groups subjects into Arch Index categories:
-     - **High Arch (Pes Cavus):** $AI < 0.21$
-     - **Normal Arch:** $0.21 \le AI \le 0.26$
-     - **Flatfoot (Pes Planus):** $AI > 0.26$
-   * Exports formatted ASCII datasets ready for statistical analysis in SPSS / ANOVA.
-
 ---
 
-## 📂 Repository Structure
+## 📂 Struktur Repositori
 
 ```text
-├── main_rscan_pipeline.m                   # Unified Master Pipeline Entrypoint
-├── src/                                    # Modular stage functions & geometry helpers
-│   ├── resolve_output_dir.m                # Smart output directory resolution & fallback
-│   ├── scan_subject_trials.m               # Dynamic N-trial detection per subject
-│   ├── stage1_extract_3d_cop.m             # Stage 1: 3D matrix & COP extraction
-│   ├── stage2_segment_12boxes.m            # Stage 2: 12-box foot partitioning
-│   ├── stage3_compute_fap.m                # Stage 3: Force, Area, Pressure (101 pts)
-│   ├── stage4_temporal_events.m            # Stage 4: Timing & %BW normalization
-│   ├── stage5_subject_aggregation.m        # Stage 5: N-trial mean & standard deviation
-│   ├── stage6_group_analysis.m             # Stage 6: Arch Index & SPSS matrix export
-│   ├── func_footaxis.m                     # Foot axis helper
-│   ├── func_abcd_in.m                      # Point-in-polygon helper
-│   ├── func_perpendical_point_to_line.m    # Geometric perpendicular projection helper
-│   └── func_box_link.m                     # Interactive box boundary linker
+├── rscan_gui.m                             # 🚀 APLIKASI UTAMA: Graphical User Interface Studio
+├── main_rscan_pipeline.m                   # Engine Pemroses Utama (Master Orchestrator)
+├── src/                                    # Modul & Fungsi Helper Terintegrasi
+│   ├── resolve_output_dir.m                # Logika Cerdas Resolusi & Fallback Folder Output
+│   ├── scan_subject_trials.m               # Detektor Dinamis Jumlah Percobaan (1..N Trials)
+│   ├── stage1_extract_3d_cop.m             # Tahap 1: Ekstraksi Array 3D & COP
+│   ├── stage2_segment_12boxes.m            # Tahap 2: Segmentasi 12 Box Telapak Kaki
+│   ├── stage3_compute_fap.m                # Tahap 3: Perhitungan F, A, P (101 Titik)
+│   ├── stage4_temporal_events.m            # Tahap 4: Timing Kontak & Normalisasi %BW
+│   ├── stage5_subject_aggregation.m        # Tahap 5: Rata-rata Multi-Trial per Subjek
+│   ├── stage6_group_analysis.m             # Tahap 6: Analisis Grup Arch Index & SPSS
+│   ├── func_footaxis.m                     # Helper: Sumbu Geometris Telapak Kaki
+│   ├── func_abcd_in.m                      # Helper: Deteksi Sensor dalam Poligon 4 Titik
+│   ├── func_perpendical_point_to_line.m    # Helper: Aljabar Vektor Proyeksi Garis
+│   └── func_box_link.m                     # Helper: Penghubung Titik Batas
 │
-├── coba rs scan/                           # Legacy reference scripts (preserved)
-├── 20260824_rscop_box_pressure/           # Legacy data & reference (preserved)
-├── .gitignore                              # Git filter for large raw data (~3.85 GB)
-└── README.md                               # Project documentation
+├── coba rs scan/                           # Skrip Legacy Referensi (Dipertahankan 100%)
+├── 20260824_rscop_box_pressure/           # Data & Hasil Legacy Referensi (Dipertahankan 100%)
+├── .gitignore                              # Filter Git untuk Data Besar (~3.85 GB)
+└── README.md                               # Dokumentasi Teknis Repositori
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Cara Menjalankan
 
-### Prerequisites
-* MATLAB R2018a or newer (compatible with legacy and modern releases).
-
-### Quick Execution
-Run the unified master pipeline directly from MATLAB in the root directory:
-
+### Opsi 1: Menjalankan via GUI (Direkomendasikan)
 ```matlab
-% 1. Run full pipeline for all discovered subjects with default settings:
+rscan_gui
+```
+
+### Opsi 2: Menjalankan via Skrip Command Window (CLI / Batch Script)
+```matlab
+% 1. Eksekusi default (semua subjek & semua tahap):
 main_rscan_pipeline();
 
-% 2. Run for specific subject(s) with custom output folder:
-main_rscan_pipeline('subject', {'R_t000', 'L_t000'}, 'output_dir', 'D:\MyOutput');
+% 2. Eksekusi untuk subjek dan folder output khusus:
+main_rscan_pipeline('subject', {'R_t000', 'L_t000'}, 'output_dir', 'D:\Hasil_RScan');
 
-% 3. Run specific stages (e.g. Stage 1 to 3 only):
+% 3. Eksekusi tahapan tertentu saja (misal tahap 1 sampai 3):
 main_rscan_pipeline('stages', 1:3);
 
-% 4. Custom bodyweight normalization (e.g. 75 kg):
+% 4. Normalisasi berat badan khusus (contoh: 75 kg):
 main_rscan_pipeline('bodyweight', 75);
 ```
 
-### Smart Output Resolution & Fallback
-The pipeline automatically formats the output folder as `<subject_name>_<YYYYMMDD>`.
-- If the target folder is empty, output is saved directly in `<output_dir>/<subject_name>_<YYYYMMDD>`.
-- If the folder contains previous results or general files, it automatically creates/routes to `<output_dir>/output/<subject_name>_<YYYYMMDD>`.
-- Inside each subject folder, structured stage subfolders (`1_step_level` to `6_group`) are preserved.
-
 ---
 
-## 📄 License & Notes
-Developed for plantar pressure biomechanics research and gait analysis. All rights reserved.
+## 📄 Lisensi & Catatan
+Dikembangkan untuk riset biomekanika tekanan plantar dan analisis gaya berjalan (*gait analysis*). Seluruh hak cipta dilindungi.
