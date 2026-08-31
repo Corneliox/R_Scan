@@ -27,7 +27,6 @@ hFig = figure('Name', 'RSscan Plantar Pressure & Gait Analysis Studio', ...
 
 % --- Color Palette & Fonts ---
 c_panel  = [1.0, 1.0, 1.0];
-c_primary= [0.12, 0.53, 0.90];
 c_success= [0.18, 0.65, 0.35];
 font_main = 'Segoe UI';
 
@@ -264,7 +263,6 @@ refresh_subjects();
         
         % Subjects
         sel_idx = get(hListSubjects, 'Value');
-        sub_list = get(hListSubjects, 'String');
         
         if isempty(sel_idx) || isempty(discovered_subs)
             msgbox('Pilih minimal satu subjek untuk diproses.', 'Peringatan', 'warn');
@@ -283,14 +281,14 @@ refresh_subjects();
         
         % Update Log
         log_msg = {
-            sprintf('[%s] Memulai pipeline RSscan...', datestr(now, 'HH:MM:SS')), ...
-            sprintf('Input  : %s', raw_dir), ...
-            sprintf('Output : %s', out_dir), ...
-            sprintf('Subjek : %d subjek dipilih', length(selected_sub_ids)), ...
-            sprintf('Stages : %s', num2str(stages)), ...
+            sprintf('[%s] Memulai pipeline RSscan...', datestr(now, 'HH:MM:SS'));
+            sprintf('Input  : %s', raw_dir);
+            sprintf('Output : %s', out_dir);
+            sprintf('Subjek : %d subjek dipilih', length(selected_sub_ids));
+            sprintf('Stages : %s', num2str(stages));
             'Sedang memproses... Harap tunggu (lihat Command Window MATLAB untuk detail lengkap).'
         };
-        set(hLogBox, 'String', log_msg);
+        set(hLogBox, 'String', log_msg(:));
         drawnow;
         
         set(hBtnRun, 'Enable', 'off', 'String', '⏳ PROCESSING...');
@@ -304,18 +302,18 @@ refresh_subjects();
                                                 'ratio_c', ratio_vals);
             
             complete_msg = {
-                sprintf('[%s] ✅ EKSEKUSI PIPELINE SELESAI!', datestr(now, 'HH:MM:SS')), ...
-                sprintf('Hasil tersimpan di: %s', final_out.root), ...
+                sprintf('[%s] ✅ EKSEKUSI PIPELINE SELESAI!', datestr(now, 'HH:MM:SS'));
+                sprintf('Hasil tersimpan di: %s', final_out.root);
                 'Seluruh tahap berhasil diproses tanpa error.'
             };
-            set(hLogBox, 'String', [log_msg; complete_msg]);
+            set(hLogBox, 'String', [log_msg(:); complete_msg(:)]);
             msgbox(sprintf('Proses selesai!\nHasil tersimpan di:\n%s', final_out.root), 'Sukses', 'help');
         catch ME
             err_msg = {
-                sprintf('[%s] ❌ ERROR: %s', datestr(now, 'HH:MM:SS'), ME.message), ...
+                sprintf('[%s] ❌ ERROR: %s', datestr(now, 'HH:MM:SS'), ME.message);
                 'Periksa detail error di Command Window.'
             };
-            set(hLogBox, 'String', [log_msg; err_msg]);
+            set(hLogBox, 'String', [log_msg(:); err_msg(:)]);
             errordlg(['Terjadi kesalahan: ', ME.message], 'Error Pipeline');
         end
         
