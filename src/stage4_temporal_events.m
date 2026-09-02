@@ -59,8 +59,19 @@ for w = 1:length(trial_tags)
             start_end_max_peak(q, :) = [x1, x2, max_index, max_value];
         end
         
-        % Compute dynamic contact area from inbox cell values
+        % Compute dynamic contact area from inbox cell values (with cross-folder fallback)
         val_file = fullfile(inval_dir, sprintf('box12_value_inbox%d_%s.txt', q, tag));
+        if ~exist(val_file, 'file')
+            if is_left
+                alt_file = fullfile(out_paths.stage3_inval_R, sprintf('box12_value_inbox%d_%s.txt', q, tag));
+            else
+                alt_file = fullfile(out_paths.stage3_inval_L, sprintf('box12_value_inbox%d_%s.txt', q, tag));
+            end
+            if exist(alt_file, 'file')
+                val_file = alt_file;
+            end
+        end
+        
         if exist(val_file, 'file')
             box_val = load(val_file);
             raw_area = sum(box_val > 0, 2) * sensor_cell_area;
