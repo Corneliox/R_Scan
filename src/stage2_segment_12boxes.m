@@ -1,10 +1,12 @@
 ﻿function [success_tags] = stage2_segment_12boxes(trial_tags, out_paths, aux_data_dir, ratio_c)
 % STAGE2_SEGMENT_12BOXES - Computes 12 Functional Anatomical Regions on the Foot
 %
-% Exactly matches loop2_step_box12_get_xy_20080810.m logic, visualization, and labeling.
+% Dynamically adapts to Foot Laterality (Left vs Right):
+% - Left Foot:  Medial (Hallux, MT1, Mid Med, Heel Med) is on the RIGHT (larger X)
+% - Right Foot: Medial (Hallux, MT1, Mid Med, Heel Med) is on the LEFT (smaller X)
 %
 % Inputs:
-%   trial_tags   - Cell array of trial tags, e.g. {'R_t000_1', 't001_1'}
+%   trial_tags   - Cell array of trial tags, e.g. {'R_t000_1', 'L_t000_1', 'R_kanan_kiri_1'}
 %   out_paths    - Structure of paths from resolve_output_dir
 %   aux_data_dir - Optional folder containing manual landmark files (anatomy_p, xy_cop_i100)
 %   ratio_c      - Partition ratio for metatarsals (default: [30, 20, 20])
@@ -22,7 +24,7 @@ success_tags = {};
 level_1 = 90; level_2 = 70; level_3 = 69; level_4 = 68;
 
 box_color = [
-    0.6   0.6   1.0;   % 1 Toe 1
+    0.6   0.6   1.0;   % 1 Toe 1 (Hallux)
     0.0   0.7   0.0;   % 2 Toe 2
     1.0   0.5   0.0;   % 3 Toe 3
     1.0   1.0   0.0;   % 4 Toe 4-5
@@ -75,7 +77,7 @@ for w = 1:length(trial_tags)
         if exist(cand_cop, 'file'), xy_cop_i100 = load(cand_cop); end
     end
     
-    % --- 1. Robust Automated Anatomical Landmark Discovery ---
+    % --- 1. Robust Anatomical Landmark Discovery with Laterality Detection ---
     if isempty(anatomy_p) || size(anatomy_p, 1) < 4
         rows_active = find(any(map_level_max > 0, 2));
         cols_active = find(any(map_level_max > 0, 1));
@@ -89,7 +91,7 @@ for w = 1:length(trial_tags)
         y_max = max(rows_active);
         total_h = max(10, y_max - y_min + 1);
         
-        % Compute active column bounds per active row
+        % Compute active column bounds per row
         c_min_per_r = zeros(n_len, 1);
         c_max_per_r = zeros(n_len, 1);
         for r = y_min:y_max
@@ -103,23 +105,57 @@ for w = 1:length(trial_tags)
             end
         end
         
+        % Determine Foot Laterality (Left vs Right)
+        is_foot_right = false;
+        if startsWith(tag, 'R_', 'IgnoreCase', true) || ...
+           contains(tag, '_R_', 'IgnoreCase', true) || ...
+           contains(tag, 'kanan', 'IgnoreCase', true) || ...
+           contains(tag, 'Right', 'IgnoreCase', true)
+            is_foot_right = true;
+        elseif startsWith(tag, 'L_', 'IgnoreCase', true) || ...
+               contains(tag, '_L_', 'IgnoreCase', true) || ...
+               contains(tag, 'kiri', 'IgnoreCase', true) || ...
+               contains(tag, 'Left', 'IgnoreCase', true)
+            is_foot_right = false;
+        else
+            % Automatic morphological detection from Hallux peak
+            forefoot_rows = max(1, round(y_min + 0.50 * total_h)):y_max;
+            forefoot_patch = map_level_max(forefoot_rows, :);
+            [~, max_lin_idx] = max(forefoot_patch(:));
+            [~, peak_col] = ind2sub(size(forefoot_patch), max_lin_idx);
+            mid_col = mean(cols_active);
+            is_foot_right = (peak_col < mid_col);
+        end
+        
         % Heel zone (bottom 0% to 22%)
         heel_rows = y_min:min(y_max, round(y_min + 0.22 * total_h));
-        x_lat_real = min(c_min_per_r(heel_rows));
-        x_med_real = max(c_max_per_r(heel_rows));
         y_heel_base = y_min;
-        x_heel_c    = (x_lat_real + x_med_real) / 2;
         
         % Metatarsal zone (55% to 75%)
         mt_rows = max(y_min, round(y_min + 0.55 * total_h)):min(y_max, round(y_min + 0.75 * total_h));
-        x_lat_for = min(c_min_per_r(mt_rows));
-        x_med_for = max(c_max_per_r(mt_rows));
-        y_mt_c    = round(y_min + 0.68 * total_h);
-        x_mt_c    = (x_lat_for + x_med_for) / 2;
+        y_mt_c  = round(y_min + 0.68 * total_h);
+        
+        if is_foot_right
+            % Right Foot: Medial is on the LEFT (smaller X), Lateral on RIGHT (larger X)
+            x_med_real = min(c_min_per_r(heel_rows));
+            x_lat_real = max(c_max_per_r(heel_rows));
+            
+            x_med_for  = min(c_min_per_r(mt_rows));
+            x_lat_for  = max(c_max_per_r(mt_rows));
+        else
+            % Left Foot:  Medial is on the RIGHT (larger X), Lateral on LEFT (smaller X)
+            x_med_real = max(c_max_per_r(heel_rows));
+            x_lat_real = min(c_min_per_r(heel_rows));
+            
+            x_med_for  = max(c_max_per_r(mt_rows));
+            x_lat_for  = min(c_min_per_r(mt_rows));
+        end
+        
+        x_heel_c = (x_med_real + x_lat_real) / 2;
+        x_mt_c   = (x_med_for  + x_lat_for)  / 2;
         
         % Toe apex zone (75% to 100%)
         toe_rows = max(y_min, round(y_min + 0.75 * total_h)):y_max;
-        % Hallux / toe center of mass
         t_weights = map_level_max(toe_rows, :);
         [t_r, t_c] = find(t_weights > 0);
         if ~isempty(t_c)
@@ -137,11 +173,11 @@ for w = 1:length(trial_tags)
         end
         y_toe_top = y_max;
         
-        % Exact definition of anatomy_p matching loop2:
-        % [ xy_med_real(1), xy_med_for(1), xy_med_real(2), xy_med_for(2) ]
-        % [ xy_lat_real(1), xy_lat_for(1), xy_lat_real(2), xy_lat_for(2) ]
-        % [ xy_heel(1),     xy_toe(1),     xy_heel(2),     xy_toe(2)     ]
-        % [ xy_mt(1),       xy_mt(2),      xy_ai(1),       xy_ai(2)      ]
+        % Standard Definition of anatomy_p:
+        % Row 1: Medial Line  -> [x_med_real, x_med_for, y_med_real, y_med_for]
+        % Row 2: Lateral Line -> [x_lat_real, x_lat_for, y_lat_real, y_lat_for]
+        % Row 3: Foot Axis    -> [x_heel,     x_toe,     y_heel,     y_toe]
+        % Row 4: MT Landmark  -> [x_mt,       y_mt,      ArchIndex,  ArchIndex]
         anatomy_p = [
             x_med_real, x_med_for, y_heel_base + 1, y_mt_c;
             x_lat_real, x_lat_for, y_heel_base + 1, y_mt_c;
@@ -194,9 +230,9 @@ for w = 1:length(trial_tags)
     xy_mt       = [anatomy_p(4,1); anatomy_p(4,2)];
     xy_heel     = [anatomy_p(3,1); anatomy_p(3,3)];
     
-    x_a = [xy_med_real(1), xy_med_for(1)];
+    x_a = [xy_med_real(1), xy_med_for(1)]; % Line A: Always Medial
     y_a = [xy_med_real(2), xy_med_for(2)];
-    x_b = [xy_lat_real(1), xy_lat_for(1)];
+    x_b = [xy_lat_real(1), xy_lat_for(1)]; % Line B: Always Lateral
     y_b = [xy_lat_real(2), xy_lat_for(2)];
     
     x_ct_p  = xy_toe(1);  y_ct_p  = xy_toe(2);
@@ -246,7 +282,7 @@ for w = 1:length(trial_tags)
         x_vc_b(i) = vc_b(1); y_vc_b(i) = vc_b(2);
     end
     
-    % Metatarsal transversal division (Level 4 to Level 5)
+    % Metatarsal transversal division (Level 4 to Level 5) from Medial to Lateral
     x_aa = [x_vc_a(4), x_vc_b(4)]; y_aa = [y_vc_a(4), y_vc_b(4)];
     x_bb = [x_vc_a(5), x_vc_b(5)]; y_bb = [y_vc_a(5), y_vc_b(5)];
     
@@ -261,12 +297,12 @@ for w = 1:length(trial_tags)
     x_cd2_d = x_cc; y_cd2_d = y_cc;
     x_cd3_d = x_dd; y_cd3_d = y_dd;
     
-    % Toe transversal division (Level 5 to Level 2)
+    % Toe transversal division (Level 5 to Level 2) from Medial to Lateral
     x_bb_toe = [x_vc_a(2), x_vc_b(2)]; y_bb_toe = [y_vc_a(2), y_vc_b(2)];
     [x_dd_toe, y_dd_toe] = func_perpendical_point_to_line(x_aa, y_aa, x_bb_toe, y_bb_toe, x_cc, y_cc);
     x_ct_d = x_dd_toe; y_ct_d = y_dd_toe;
     
-    % --- 4. Construct 12 Boxes (Exact loop2 Definition) ---
+    % --- 4. Construct 12 Boxes (Exact loop2 Definition: 1=Toe1..4=Toe4-5, 5=MT1..8=MT4-5) ---
     x_a_v = x_vc_a;   y_a_v = y_vc_a;
     x_b_v = x_vc_b;   y_b_v = y_vc_b;
     x_c_v = x_c;      y_c_v = y_c;
