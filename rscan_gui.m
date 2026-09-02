@@ -31,7 +31,7 @@ c_success= [0.18, 0.65, 0.35];
 font_main = 'Segoe UI';
 
 % Title Banner
-uicontrol(hFig, 'Style', 'text', 'String', 'RSscan Plantar Pressure & Gait Analysis', ...
+uicontrol(hFig, 'Style', 'text', 'String', 'RSscan Plantar Pressure & Gait Analysis Studio', ...
           'Units', 'pixels', 'Position', [20, 630, 740, 35], ...
           'FontName', font_main, 'FontSize', 15, 'FontWeight', 'bold', ...
           'BackgroundColor', [0.94, 0.94, 0.96], 'ForegroundColor', [0.15, 0.2, 0.3], ...
@@ -257,7 +257,7 @@ refresh_subjects();
         if get(hChk6, 'Value'), stages = [stages, 6]; end
         
         if isempty(stages)
-            msgbox('Pilih minimal satu tahap untuk dijalankan.', 'Peringatan', 'warn');
+            msgbox('Please select at least one stage to execute.', 'Warning', 'warn');
             return;
         end
         
@@ -265,7 +265,7 @@ refresh_subjects();
         sel_idx = get(hListSubjects, 'Value');
         
         if isempty(sel_idx) || isempty(discovered_subs)
-            msgbox('Pilih minimal satu subjek untuk diproses.', 'Peringatan', 'warn');
+            msgbox('Please select at least one subject to process.', 'Warning', 'warn');
             return;
         end
         
@@ -281,12 +281,12 @@ refresh_subjects();
         
         % Update Log
         log_msg = {
-            sprintf('[%s] Memulai pipeline RSscan...', datestr(now, 'HH:MM:SS'));
-            sprintf('Input  : %s', raw_dir);
-            sprintf('Output : %s', out_dir);
-            sprintf('Subjek : %d subjek dipilih', length(selected_sub_ids));
-            sprintf('Stages : %s', num2str(stages));
-            'Sedang memproses... Harap tunggu (lihat Command Window MATLAB untuk detail lengkap).'
+            sprintf('[%s] Starting RSscan Processing Pipeline...', datestr(now, 'HH:MM:SS'));
+            sprintf('Input    : %s', raw_dir);
+            sprintf('Output   : %s', out_dir);
+            sprintf('Subjects : %d subject(s) selected', length(selected_sub_ids));
+            sprintf('Stages   : %s', num2str(stages));
+            'Processing in progress... Please wait (see MATLAB Command Window for details).'
         };
         set(hLogBox, 'String', log_msg(:));
         drawnow;
@@ -302,19 +302,19 @@ refresh_subjects();
                                                 'ratio_c', ratio_vals);
             
             complete_msg = {
-                sprintf('[%s] ✅ EKSEKUSI PIPELINE SELESAI!', datestr(now, 'HH:MM:SS'));
-                sprintf('Hasil tersimpan di: %s', final_out.root);
-                'Seluruh tahap berhasil diproses tanpa error.'
+                sprintf('[%s] ✅ PIPELINE EXECUTION COMPLETED!', datestr(now, 'HH:MM:SS'));
+                sprintf('Results saved to: %s', final_out.root);
+                'All selected stages were processed successfully without errors.'
             };
             set(hLogBox, 'String', [log_msg(:); complete_msg(:)]);
-            msgbox(sprintf('Proses selesai!\nHasil tersimpan di:\n%s', final_out.root), 'Sukses', 'help');
+            msgbox(sprintf('Pipeline execution completed successfully!\n\nResults saved to:\n%s', final_out.root), 'Success', 'help');
         catch ME
             err_msg = {
                 sprintf('[%s] ❌ ERROR: %s', datestr(now, 'HH:MM:SS'), ME.message);
-                'Periksa detail error di Command Window.'
+                'Check MATLAB Command Window for complete error trace.'
             };
             set(hLogBox, 'String', [log_msg(:); err_msg(:)]);
-            errordlg(['Terjadi kesalahan: ', ME.message], 'Error Pipeline');
+            errordlg(['Pipeline execution error: ', ME.message], 'Pipeline Error');
         end
         
         set(hBtnRun, 'Enable', 'on', 'String', '▶  RUN PIPELINE');
@@ -329,7 +329,7 @@ refresh_subjects();
             if exist(parent_out, 'dir')
                 winopen(parent_out);
             else
-                msgbox('Folder output belum terbentuk.', 'Info', 'help');
+                msgbox('Output directory has not been created yet.', 'Info', 'help');
             end
         end
     end

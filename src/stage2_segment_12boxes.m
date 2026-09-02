@@ -59,7 +59,7 @@ for w = 1:length(trial_tags)
     
     max_txt_path = fullfile(out_paths.stage1_level, sprintf('map_level_max_%s.txt', tag));
     if ~exist(max_txt_path, 'file')
-        fprintf('SKIPPED (map_level_max tidak ditemukan)\n');
+        fprintf('SKIPPED (map_level_max not found)\n');
         continue;
     end
     map_level_max = load(max_txt_path);

@@ -1,4 +1,4 @@
-﻿function [success_tags] = stage4_temporal_events(trial_tags, out_paths, bodyweight_kg)
+function [success_tags] = stage4_temporal_events(trial_tags, out_paths, bodyweight_kg)
 % STAGE4_TEMPORAL_EVENTS - Computes Contact Timing, Peak Events, and %BW Normalization
 %
 % Inputs:
@@ -19,7 +19,7 @@ for w = 1:length(trial_tags)
     
     fap_path = fullfile(out_paths.stage3_fap, sprintf('box12_data_101_f12_p12_m1_s1_%s.txt', tag));
     if ~exist(fap_path, 'file')
-        fprintf('SKIPPED (Data 101 titik tidak ditemukan)\n');
+        fprintf('SKIPPED (101-point stance data not found)\n');
         continue;
     end
     

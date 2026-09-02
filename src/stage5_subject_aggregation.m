@@ -1,4 +1,4 @@
-﻿function [success_subjects] = stage5_subject_aggregation(subjects_info, out_paths, bodyweight_kg)
+function [success_subjects] = stage5_subject_aggregation(subjects_info, out_paths, bodyweight_kg)
 % STAGE5_SUBJECT_AGGREGATION - Averages N Trials per Subject (Mean & SD)
 %
 % Inputs:
@@ -41,7 +41,7 @@ for s = 1:length(subjects_info)
     end
     
     if v_count == 0
-        fprintf('SKIPPED (Tidak ada trial valid)\n');
+        fprintf('SKIPPED (No valid trials)\n');
         continue;
     end
     

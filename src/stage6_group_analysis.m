@@ -1,4 +1,4 @@
-﻿function stage6_group_analysis(processed_subjects, out_paths, custom_groups)
+function stage6_group_analysis(processed_subjects, out_paths, custom_groups)
 % STAGE6_GROUP_ANALYSIS - Cohort Group Analysis by Arch Index & SPSS Export
 %
 % Inputs:
@@ -7,7 +7,7 @@
 %   custom_groups      - Optional struct defining custom group lists
 
 if isempty(processed_subjects)
-    fprintf('   [Stage 6] Tidak ada subjek untuk analisis grup.\n');
+    fprintf('   [Stage 6] No subjects available for group analysis.\n');
     return;
 end
 

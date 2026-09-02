@@ -1,4 +1,4 @@
-﻿function [success_tags] = stage3_compute_fap(trial_tags, out_paths)
+function [success_tags] = stage3_compute_fap(trial_tags, out_paths)
 % STAGE3_COMPUTE_FAP - Extracts Force, Area, and Pressure in 12 Boxes across 101 Stance Points
 %
 % Inputs:
@@ -16,7 +16,7 @@ for w = 1:length(trial_tags)
     box_path = fullfile(out_paths.stage2_xy, sprintf('xy_box12_%s.txt', tag));
     
     if ~exist(mat_path, 'file') || ~exist(box_path, 'file')
-        fprintf('SKIPPED (File mat/box tidak lengkap)\n');
+        fprintf('SKIPPED (Missing .mat or box file)\n');
         continue;
     end
     

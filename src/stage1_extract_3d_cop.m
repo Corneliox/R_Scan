@@ -49,7 +49,7 @@ for t_idx = 1:length(subject_info.trial_nums)
     [max_file, max_size] = match_file(all_files, all_structs, pat_max);
     
     if isempty(cop_file) || isempty(roll_file)
-        fprintf('SKIPPED (File COP atau Roll-off tidak ditemukan)\n');
+        fprintf('SKIPPED (Missing COP or Roll-Off file)\n');
         continue;
     end
     
@@ -98,7 +98,7 @@ for t_idx = 1:length(subject_info.trial_nums)
     [map_level, roll_frames] = parse_roll_off_file(roll_path, is_right, grid_dims, frame, configured_side);
     
     if isempty(map_level) || size(map_level, 3) == 0
-        fprintf('SKIPPED (Tidak ada frame Roll-Off yang dapat dibaca)\n');
+        fprintf('SKIPPED (No readable Roll-Off frames found)\n');
         continue;
     end
     
