@@ -26,8 +26,9 @@ hFig = figure('Name', 'RSscan Plantar Pressure & Gait Analysis Studio', ...
               'Resize', 'on');
 
 % --- Color Palette & Fonts ---
-c_panel  = [1.0, 1.0, 1.0];
-c_success= [0.18, 0.65, 0.35];
+c_panel   = [1.0, 1.0, 1.0];
+c_success = [0.18, 0.65, 0.35];
+c_curate  = [0.20, 0.45, 0.75];
 font_main = 'Segoe UI';
 
 % Title Banner
@@ -151,25 +152,31 @@ hEditRatio = uicontrol(hFig, 'Style', 'edit', 'String', '30, 20, 20', ...
                       'FontName', font_main, 'FontSize', 8.5);
 
 % =========================================================================
-% PANEL 4: EXECUTION & CONSOLE LOG
+% PANEL 4: EXECUTION, CURATION & CONSOLE LOG
 % =========================================================================
-uipanel(hFig, 'Title', ' 4. Execution & Status Log ', ...
+uipanel(hFig, 'Title', ' 4. Execution, Curation & Status Log ', ...
         'Units', 'pixels', 'Position', [20, 20, 740, 215], ...
         'FontName', font_main, 'FontSize', 10, 'FontWeight', 'bold', ...
         'BackgroundColor', c_panel, 'ForegroundColor', [0.2, 0.3, 0.4]);
 
 hBtnRun = uicontrol(hFig, 'Style', 'pushbutton', 'String', '▶  RUN PIPELINE', ...
-                    'Units', 'pixels', 'Position', [35, 175, 490, 32], ...
+                    'Units', 'pixels', 'Position', [35, 175, 260, 32], ...
                     'FontName', font_main, 'FontSize', 11, 'FontWeight', 'bold', ...
                     'BackgroundColor', c_success, 'ForegroundColor', [1, 1, 1], ...
                     'Callback', @run_pipeline_callback);
 
+hBtnCurate = uicontrol(hFig, 'Style', 'pushbutton', 'String', '🔍  Curate 12-Boxes (Editor)', ...
+                       'Units', 'pixels', 'Position', [305, 175, 240, 32], ...
+                       'FontName', font_main, 'FontSize', 9.5, 'FontWeight', 'bold', ...
+                       'BackgroundColor', c_curate, 'ForegroundColor', [1, 1, 1], ...
+                       'Callback', @curate_callback);
+
 hBtnOpenOut = uicontrol(hFig, 'Style', 'pushbutton', 'String', 'Open Output Folder', ...
-                        'Units', 'pixels', 'Position', [540, 175, 200, 32], ...
+                        'Units', 'pixels', 'Position', [555, 175, 185, 32], ...
                         'FontName', font_main, 'FontSize', 9, ...
                         'Callback', @open_output_callback);
 
-hLogBox = uicontrol(hFig, 'Style', 'edit', 'String', {'RSscan GUI Ready. Click "RUN PIPELINE" to start.'}, ...
+hLogBox = uicontrol(hFig, 'Style', 'edit', 'String', {'RSscan GUI Ready. Click "RUN PIPELINE" or "Curate 12-Boxes" to start.'}, ...
                     'Units', 'pixels', 'Position', [35, 30, 705, 135], ...
                     'FontName', 'Consolas', 'FontSize', 8.5, 'Max', 2, 'Min', 0, ...
                     'BackgroundColor', [0.12, 0.14, 0.18], 'ForegroundColor', [0.85, 0.9, 0.95], ...
@@ -241,6 +248,56 @@ refresh_subjects();
         catch ME
             set(hListSubjects, 'String', {['Error: ', ME.message]});
         end
+    end
+
+    function curate_callback(~, ~)
+        raw_dir = get(hEditRaw, 'String');
+        out_dir = get(hEditOut, 'String');
+        
+        sel_idx = get(hListSubjects, 'Value');
+        if isempty(sel_idx) || isempty(discovered_subs)
+            msgbox('Please select a subject from the listbox to curate.', 'Subject Selection', 'warn');
+            return;
+        end
+        
+        target_sub = discovered_subs(sel_idx(1));
+        if isempty(target_sub.trial_tags)
+            msgbox('No trial data available for the selected subject.', 'Warning', 'warn');
+            return;
+        end
+        
+        if length(target_sub.trial_tags) == 1
+            curate_tag = target_sub.trial_tags{1};
+        else
+            [s_t, ok] = listdlg('PromptString', sprintf('Select trial to curate for %s:', target_sub.id), ...
+                                'SelectionMode', 'single', ...
+                                'ListString', target_sub.trial_tags, ...
+                                'Name', 'Select Trial to Curate');
+            if ~ok || isempty(s_t), return; end
+            curate_tag = target_sub.trial_tags{s_t};
+        end
+        
+        exec_date = datestr(now, 'yyyymmdd');
+        out_paths = resolve_output_dir(out_dir, target_sub.id, exec_date);
+        
+        max_file = fullfile(out_paths.stage1_level, sprintf('map_level_max_%s.txt', curate_tag));
+        if ~exist(max_file, 'file')
+            log_init = {
+                sprintf('[%s] Extracting initial Stages 1 & 2 for %s before curation...', datestr(now, 'HH:MM:SS'), target_sub.id);
+                'Please wait...'
+            };
+            set(hLogBox, 'String', log_init(:));
+            drawnow;
+            stage1_extract_3d_cop(target_sub, out_paths);
+            stage2_segment_12boxes(target_sub.trial_tags, out_paths, raw_dir, [30, 20, 20]);
+        end
+        
+        ratio_str = get(hEditRatio, 'String');
+        ratio_vals = str2num(ratio_str); %#ok<ST2NM>
+        if isempty(ratio_vals) || length(ratio_vals) ~= 3, ratio_vals = [30, 20, 20]; end
+        
+        % Launch Interactive Curator Studio Window
+        interactive_box_curator(curate_tag, out_paths, ratio_vals);
     end
 
     function run_pipeline_callback(~, ~)

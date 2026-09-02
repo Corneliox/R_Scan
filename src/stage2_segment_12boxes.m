@@ -65,16 +65,29 @@ for w = 1:length(trial_tags)
     map_level_max = load(max_txt_path);
     [n_len, n_wid] = size(map_level_max);
     
-    % Try loading manual landmark files if provided
-    anatomy_p = [];
-    xy_cop_i100 = [];
+    % Try loading manual or curated landmark files if available
+    cand_anatomy = {
+        fullfile(out_paths.stage2_xy, sprintf('anatomy_p_%s.txt', tag)), ...
+        fullfile(out_paths.root, sprintf('anatomy_p_%s.txt', tag)), ...
+        fullfile(aux_data_dir, sprintf('anatomy_p_%s.txt', tag))
+    };
+    for k = 1:length(cand_anatomy)
+        if exist(cand_anatomy{k}, 'file')
+            anatomy_p = load(cand_anatomy{k});
+            if ~isempty(anatomy_p) && size(anatomy_p, 1) >= 4, break; end
+        end
+    end
     
-    if ~isempty(aux_data_dir)
-        cand_anatomy = fullfile(aux_data_dir, sprintf('anatomy_p_%s.txt', tag));
-        if exist(cand_anatomy, 'file'), anatomy_p = load(cand_anatomy); end
-        
-        cand_cop = fullfile(aux_data_dir, sprintf('xy_cop_i100_3_%s.txt', tag));
-        if exist(cand_cop, 'file'), xy_cop_i100 = load(cand_cop); end
+    cand_cop = {
+        fullfile(aux_data_dir, sprintf('xy_cop_i100_3_%s.txt', tag)), ...
+        fullfile(out_paths.stage2_xy, sprintf('xy_cop_i100_3_%s.txt', tag)), ...
+        fullfile(out_paths.root, sprintf('xy_cop_i100_3_%s.txt', tag))
+    };
+    for k = 1:length(cand_cop)
+        if exist(cand_cop{k}, 'file')
+            xy_cop_i100 = load(cand_cop{k});
+            if ~isempty(xy_cop_i100), break; end
+        end
     end
     
     % --- 1. Robust Anatomical Landmark Discovery with Laterality Detection ---
@@ -129,9 +142,9 @@ for w = 1:length(trial_tags)
         heel_rows = y_min:min(y_max, round(y_min + 0.22 * total_h));
         y_heel_base = y_min;
         
-        % Metatarsal zone (55% to 75%)
-        mt_rows = max(y_min, round(y_min + 0.55 * total_h)):min(y_max, round(y_min + 0.75 * total_h));
-        y_mt_c  = round(y_min + 0.68 * total_h);
+        % Metatarsal zone: Distal MT line / Base of toes at 78% of foot height
+        mt_rows = max(y_min, round(y_min + 0.55 * total_h)):min(y_max, round(y_min + 0.78 * total_h));
+        y_mt_distal = round(y_min + 0.78 * total_h);
         
         if is_foot_right
             % Right Foot: Medial is on the LEFT (smaller X), Lateral on RIGHT (larger X)
@@ -152,8 +165,8 @@ for w = 1:length(trial_tags)
         x_heel_c = (x_med_real + x_lat_real) / 2;
         x_mt_c   = (x_med_for  + x_lat_for)  / 2;
         
-        % Toe apex zone (75% to 100%)
-        toe_rows = max(y_min, round(y_min + 0.75 * total_h)):y_max;
+        % Toe apex zone (78% to 100%)
+        toe_rows = max(y_min, round(y_min + 0.78 * total_h)):y_max;
         t_weights = map_level_max(toe_rows, :);
         [t_r, t_c] = find(t_weights > 0);
         if ~isempty(t_c)
@@ -177,10 +190,10 @@ for w = 1:length(trial_tags)
         % Row 3: Foot Axis    -> [x_heel,     x_toe,     y_heel,     y_toe]
         % Row 4: MT Landmark  -> [x_mt,       y_mt,      ArchIndex,  ArchIndex]
         anatomy_p = [
-            x_med_real, x_med_for, y_heel_base + 1, y_mt_c;
-            x_lat_real, x_lat_for, y_heel_base + 1, y_mt_c;
+            x_med_real, x_med_for, y_heel_base + 1, y_mt_distal;
+            x_lat_real, x_lat_for, y_heel_base + 1, y_mt_distal;
             x_heel_c,   x_toe_c,   y_heel_base,     y_toe_top;
-            x_mt_c,     y_mt_c,    0.23,            0.23
+            x_mt_c,     y_mt_distal, 0.23,          0.23
         ];
     end
     
