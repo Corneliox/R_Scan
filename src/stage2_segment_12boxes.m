@@ -66,6 +66,9 @@ for w = 1:length(trial_tags)
     [n_len, n_wid] = size(map_level_max);
     
     % Try loading manual or curated landmark files if available
+    anatomy_p = [];
+    xy_cop_i100 = [];
+    
     cand_anatomy = {
         fullfile(out_paths.stage2_xy, sprintf('anatomy_p_%s.txt', tag)), ...
         fullfile(out_paths.root, sprintf('anatomy_p_%s.txt', tag)), ...
@@ -73,8 +76,11 @@ for w = 1:length(trial_tags)
     };
     for k = 1:length(cand_anatomy)
         if exist(cand_anatomy{k}, 'file')
-            anatomy_p = load(cand_anatomy{k});
-            if ~isempty(anatomy_p) && size(anatomy_p, 1) >= 4, break; end
+            loaded_p = load(cand_anatomy{k});
+            if ~isempty(loaded_p) && size(loaded_p, 1) >= 4
+                anatomy_p = loaded_p;
+                break;
+            end
         end
     end
     
@@ -85,8 +91,11 @@ for w = 1:length(trial_tags)
     };
     for k = 1:length(cand_cop)
         if exist(cand_cop{k}, 'file')
-            xy_cop_i100 = load(cand_cop{k});
-            if ~isempty(xy_cop_i100), break; end
+            loaded_c = load(cand_cop{k});
+            if ~isempty(loaded_c)
+                xy_cop_i100 = loaded_c;
+                break;
+            end
         end
     end
     
