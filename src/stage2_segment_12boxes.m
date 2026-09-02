@@ -1,4 +1,4 @@
-﻿function [success_tags] = stage2_segment_12boxes(trial_tags, out_paths, aux_data_dir, ratio_c)
+function [success_tags] = stage2_segment_12boxes(trial_tags, out_paths, aux_data_dir, ratio_c)
 % STAGE2_SEGMENT_12BOXES - Computes 12 Functional Anatomical Regions on the Foot
 %
 % Dynamically adapts to Foot Laterality (Left vs Right):
@@ -105,17 +105,15 @@ for w = 1:length(trial_tags)
             end
         end
         
-        % Determine Foot Laterality (Left vs Right)
+        % Determine Foot Laterality (Strict Prefix Check: 'L_' vs 'R_')
         is_foot_right = false;
-        if startsWith(tag, 'R_', 'IgnoreCase', true) || ...
-           contains(tag, '_R_', 'IgnoreCase', true) || ...
-           contains(tag, 'kanan', 'IgnoreCase', true) || ...
-           contains(tag, 'Right', 'IgnoreCase', true)
+        if startsWith(tag, 'R_', 'IgnoreCase', true)
             is_foot_right = true;
-        elseif startsWith(tag, 'L_', 'IgnoreCase', true) || ...
-               contains(tag, '_L_', 'IgnoreCase', true) || ...
-               contains(tag, 'kiri', 'IgnoreCase', true) || ...
-               contains(tag, 'Left', 'IgnoreCase', true)
+        elseif startsWith(tag, 'L_', 'IgnoreCase', true)
+            is_foot_right = false;
+        elseif contains(tag, '_R_', 'IgnoreCase', true) || endsWith(tag, '_R', 'IgnoreCase', true)
+            is_foot_right = true;
+        elseif contains(tag, '_L_', 'IgnoreCase', true) || endsWith(tag, '_L', 'IgnoreCase', true)
             is_foot_right = false;
         else
             % Automatic morphological detection from Hallux peak
