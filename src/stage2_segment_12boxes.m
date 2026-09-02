@@ -1,6 +1,8 @@
 ﻿function [success_tags] = stage2_segment_12boxes(trial_tags, out_paths, aux_data_dir, ratio_c)
 % STAGE2_SEGMENT_12BOXES - Computes 12 Functional Anatomical Regions on the Foot
 %
+% Exactly matches loop2_step_box12_get_xy_20080810.m logic, visualization, and labeling.
+%
 % Inputs:
 %   trial_tags   - Cell array of trial tags, e.g. {'R_t000_1', 't001_1'}
 %   out_paths    - Structure of paths from resolve_output_dir
@@ -17,21 +19,36 @@ end
 ratio_cc = [ratio_c(1), ratio_c(1)+ratio_c(2), ratio_c(1)+ratio_c(2)+ratio_c(3)];
 success_tags = {};
 
-level_1 = 90;
+level_1 = 90; level_2 = 70; level_3 = 69; level_4 = 68;
 
 box_color = [
-    0.6  0.6  1.0;   % 1 Toe 1 (Hallux)
-    0.0  0.7  0.0;   % 2 Toe 2
-    1.0  0.5  0.0;   % 3 Toe 3
-    1.0  1.0  0.0;   % 4 Toe 4-5
-    1.0  0.0  0.0;   % 5 MT 1
-    1.0  0.0  1.0;   % 6 MT 2
-    0.5  0.5  0.5;   % 7 MT 3
-    0.0  0.9  0.9;   % 8 MT 4-5
-    0.5  0.0  0.0;   % 9 Mid Med
-    0.0  1.0  0.0;   % 10 Mid Lat
-    0.7  0.0  0.7;   % 11 Heel Med
-    0.0  0.0  0.9    % 12 Heel Lat
+    0.6   0.6   1.0;   % 1 Toe 1
+    0.0   0.7   0.0;   % 2 Toe 2
+    1.0   0.5   0.0;   % 3 Toe 3
+    1.0   1.0   0.0;   % 4 Toe 4-5
+    1.0   0.0   0.0;   % 5 MT 1
+    1.0   0.0   1.0;   % 6 MT 2
+    0.5   0.5   0.5;   % 7 MT 3
+    0.0   0.9   0.9;   % 8 MT 4-5
+    0.5   0.0   0.0;   % 9 Mid med
+    0.0   1.0   0.0;   % 10 Mid lat
+    0.7   0.0   0.7;   % 11 Heel med
+    0.0   0.0   0.9    % 12 Heel lat
+];
+
+text_list = [
+    ' 1:Toe 1   ';
+    ' 2:Toe 2   ';
+    ' 3:Toe 3   ';
+    ' 4:Toe 4-5 ';
+    ' 5:MT 1    ';
+    ' 6:MT 2    ';
+    ' 7:MT 3    ';
+    ' 8:MT 4-5  ';
+    ' 9:Mid med ';
+    '10:Mid lat ';
+    '11:Heel med';
+    '12:Heel lat'
 ];
 
 for w = 1:length(trial_tags)
@@ -60,96 +77,80 @@ for w = 1:length(trial_tags)
     
     % --- 1. Robust Automated Anatomical Landmark Discovery ---
     if isempty(anatomy_p) || size(anatomy_p, 1) < 4
-        [rows, cols] = find(map_level_max > 0);
-        if isempty(rows)
-            rows = [round(n_len*0.1); round(n_len*0.9)];
-            cols = [round(n_wid*0.2); round(n_wid*0.8)];
+        rows_active = find(any(map_level_max > 0, 2));
+        cols_active = find(any(map_level_max > 0, 1));
+        
+        if isempty(rows_active)
+            rows_active = (round(n_len*0.1):round(n_len*0.9))';
+            cols_active = (round(n_wid*0.2):round(n_wid*0.8))';
         end
         
-        y_min = min(rows); y_max = max(rows);
-        foot_h = max(10, y_max - y_min + 1);
+        y_min = min(rows_active);
+        y_max = max(rows_active);
+        total_h = max(10, y_max - y_min + 1);
         
-        % Zone 1: Heel Region (0% to 25% foot length from bottom)
-        heel_mask = (rows >= y_min) & (rows <= y_min + 0.25 * foot_h);
-        if any(heel_mask)
-            h_rows = rows(heel_mask);
-            h_cols = cols(heel_mask);
-            h_weights = zeros(size(h_rows));
-            for k = 1:length(h_rows)
-                h_weights(k) = map_level_max(h_rows(k), h_cols(k));
-            end
-            sum_hw = sum(h_weights);
-            if sum_hw > 0
-                x_heel_c = sum(h_cols .* h_weights) / sum_hw;
-                y_heel_c = sum(h_rows .* h_weights) / sum_hw;
+        % Compute active column bounds per active row
+        c_min_per_r = zeros(n_len, 1);
+        c_max_per_r = zeros(n_len, 1);
+        for r = y_min:y_max
+            r_cols = find(map_level_max(r, :) > 0);
+            if ~isempty(r_cols)
+                c_min_per_r(r) = min(r_cols);
+                c_max_per_r(r) = max(r_cols);
             else
-                x_heel_c = mean(h_cols); y_heel_c = mean(h_rows);
+                c_min_per_r(r) = min(cols_active);
+                c_max_per_r(r) = max(cols_active);
             end
-            x_lat_real = max(1, min(h_cols) - 1);       % Lateral is on Left (smaller X)
-            x_med_real = min(n_wid, max(h_cols) + 1);   % Medial is on Right (larger X)
-        else
-            x_heel_c = mean(cols); y_heel_c = y_min + 0.1 * foot_h;
-            x_lat_real = max(1, min(cols)); x_med_real = min(n_wid, max(cols));
-        end
-        y_heel_base = max(1, y_min - 1);
-        
-        % Zone 2: Metatarsal / Forefoot Region (55% to 75% foot length)
-        mt_mask = (rows >= y_min + 0.55 * foot_h) & (rows <= y_min + 0.78 * foot_h);
-        if any(mt_mask)
-            mt_rows = rows(mt_mask);
-            mt_cols = cols(mt_mask);
-            mt_weights = zeros(size(mt_rows));
-            for k = 1:length(mt_rows)
-                mt_weights(k) = map_level_max(mt_rows(k), mt_cols(k));
-            end
-            sum_mw = sum(mt_weights);
-            if sum_mw > 0
-                x_mt_c = sum(mt_cols .* mt_weights) / sum_mw;
-                y_mt_c = sum(mt_rows .* mt_weights) / sum_mw;
-            else
-                x_mt_c = mean(mt_cols); y_mt_c = mean(mt_rows);
-            end
-            x_lat_for = max(1, min(mt_cols) - 2);       % MT 4-5 (Lateral, Left)
-            x_med_for = min(n_wid, max(mt_cols) + 2);   % MT 1 (Medial, Right)
-        else
-            x_mt_c = mean(cols); y_mt_c = y_min + 0.65 * foot_h;
-            x_lat_for = max(1, min(cols) - 1); x_med_for = min(n_wid, max(cols) + 1);
         end
         
-        % Zone 3: Toe Apex Region (78% to 100% foot length)
-        toe_mask = (rows >= y_min + 0.78 * foot_h);
-        if any(toe_mask)
-            t_rows = rows(toe_mask);
-            t_cols = cols(toe_mask);
-            t_weights = zeros(size(t_rows));
-            for k = 1:length(t_rows)
-                t_weights(k) = map_level_max(t_rows(k), t_cols(k));
+        % Heel zone (bottom 0% to 22%)
+        heel_rows = y_min:min(y_max, round(y_min + 0.22 * total_h));
+        x_lat_real = min(c_min_per_r(heel_rows));
+        x_med_real = max(c_max_per_r(heel_rows));
+        y_heel_base = y_min;
+        x_heel_c    = (x_lat_real + x_med_real) / 2;
+        
+        % Metatarsal zone (55% to 75%)
+        mt_rows = max(y_min, round(y_min + 0.55 * total_h)):min(y_max, round(y_min + 0.75 * total_h));
+        x_lat_for = min(c_min_per_r(mt_rows));
+        x_med_for = max(c_max_per_r(mt_rows));
+        y_mt_c    = round(y_min + 0.68 * total_h);
+        x_mt_c    = (x_lat_for + x_med_for) / 2;
+        
+        % Toe apex zone (75% to 100%)
+        toe_rows = max(y_min, round(y_min + 0.75 * total_h)):y_max;
+        % Hallux / toe center of mass
+        t_weights = map_level_max(toe_rows, :);
+        [t_r, t_c] = find(t_weights > 0);
+        if ~isempty(t_c)
+            t_w = zeros(size(t_c));
+            for k = 1:length(t_c)
+                t_w(k) = t_weights(t_r(k), t_c(k));
             end
-            sum_tw = sum(t_weights);
-            if sum_tw > 0
-                x_toe_c = sum(t_cols .* t_weights) / sum_tw;
+            if sum(t_w) > 0
+                x_toe_c = sum(t_c .* t_w) / sum(t_w);
             else
-                x_toe_c = mean(t_cols);
+                x_toe_c = mean(t_c);
             end
         else
             x_toe_c = x_mt_c;
         end
-        y_toe_top = min(n_len, y_max + 1);
+        y_toe_top = y_max;
         
-        % Standard Definition of anatomy_p:
-        % Row 1: Medial Line  -> [x_med_real, x_med_for, y_med_real, y_med_for]
-        % Row 2: Lateral Line -> [x_lat_real, x_lat_for, y_lat_real, y_lat_for]
-        % Row 3: Foot Axis    -> [x_heel,     x_toe,     y_heel,     y_toe]
-        % Row 4: MT Landmark  -> [x_mt,       y_mt,      ArchIndex,  ArchIndex]
+        % Exact definition of anatomy_p matching loop2:
+        % [ xy_med_real(1), xy_med_for(1), xy_med_real(2), xy_med_for(2) ]
+        % [ xy_lat_real(1), xy_lat_for(1), xy_lat_real(2), xy_lat_for(2) ]
+        % [ xy_heel(1),     xy_toe(1),     xy_heel(2),     xy_toe(2)     ]
+        % [ xy_mt(1),       xy_mt(2),      xy_ai(1),       xy_ai(2)      ]
         anatomy_p = [
-            x_med_real, x_med_for, y_heel_base, y_mt_c;
-            x_lat_real, x_lat_for, y_heel_base, y_mt_c;
-            x_heel_c,   x_toe_c,   y_heel_base, y_toe_top;
-            x_mt_c,     y_mt_c,    0.23,        0.23
+            x_med_real, x_med_for, y_heel_base + 1, y_mt_c;
+            x_lat_real, x_lat_for, y_heel_base + 1, y_mt_c;
+            x_heel_c,   x_toe_c,   y_heel_base,     y_toe_top;
+            x_mt_c,     y_mt_c,    0.23,            0.23
         ];
     end
     
-    % --- 2. Extract Real COP Trajectory from 3D Roll-Off ---
+    % --- 2. Extract Real COP Trajectory from Stage 1 3D Roll-Off ---
     if isempty(xy_cop_i100)
         mat_path = fullfile(out_paths.stage1_level, sprintf('map_level_%s.mat', tag));
         if exist(mat_path, 'file')
@@ -184,7 +185,7 @@ for w = 1:length(trial_tags)
         ];
     end
     
-    % --- 3. Geometric Longitudinal Foot Partitioning ---
+    % --- 3. Exact loop2 Geometric Foot Axis & Partitioning ---
     xy_lat_for  = [anatomy_p(2,2); anatomy_p(2,4)];
     xy_lat_real = [anatomy_p(2,1); anatomy_p(2,3)];
     xy_med_for  = [anatomy_p(1,2); anatomy_p(1,4)];
@@ -265,7 +266,7 @@ for w = 1:length(trial_tags)
     [x_dd_toe, y_dd_toe] = func_perpendical_point_to_line(x_aa, y_aa, x_bb_toe, y_bb_toe, x_cc, y_cc);
     x_ct_d = x_dd_toe; y_ct_d = y_dd_toe;
     
-    % --- 4. Construct 12 Boxes ---
+    % --- 4. Construct 12 Boxes (Exact loop2 Definition) ---
     x_a_v = x_vc_a;   y_a_v = y_vc_a;
     x_b_v = x_vc_b;   y_b_v = y_vc_b;
     x_c_v = x_c;      y_c_v = y_c;
@@ -290,29 +291,60 @@ for w = 1:length(trial_tags)
     % Save box coordinates
     save(fullfile(out_paths.stage2_xy, sprintf('xy_box12_%s.txt', tag)), 'box', '-ascii');
     
-    % --- 5. Render & Save Plot (Matching Sisipan 1 Style) ---
+    % --- 5. Render & Save Plot Exactly Matching loop2 / Sisipan 1 ---
     fig = figure('Visible', 'off');
     surf(map_level_max); hold on;
     
-    % Real COP Trajectory (Red line with white highlight)
+    % COP Trajectory
     x_copi = xy_cop_i100(:, 1); y_copi = xy_cop_i100(:, 2);
-    plot3(x_copi, y_copi, x_copi.*0 + level_1, 'w-', 'linewidth', 3);
-    plot3(x_copi, y_copi, x_copi.*0 + level_1, 'r.-', 'linewidth', 1.5);
+    cop_zi = x_copi(:, 1).*0 + level_1;
+    plot3(x_copi, y_copi, cop_zi, 'w', 'linewidth', 3); hold on; grid on;
+    plot3(x_copi, y_copi, cop_zi, 'r.-', 'linewidth', 1); hold on; grid on;
     
-    % Draw 12 Box Polygons
+    % Medial & Lateral Boundary lines and levels
+    z_vc = x_vc_a(1, :).*0 + level_3;
+    plot3(x_a, y_a, [level_1, level_1], 'yo-', 'linewidth', 1); hold on;
+    plot3(x_b, y_b, [level_1, level_1], 'yo-', 'linewidth', 1); hold on;
+    plot3([x_a(1), x_b(1)], [y_a(1), y_b(1)], [level_1, level_1], 'y-o', 'linewidth', 1);
+    plot3([x_a(2), x_b(2)], [y_a(2), y_b(2)], [level_1, level_1], 'y-o', 'linewidth', 1);
+    plot3(x_cm(1), y_cm(1), [level_2, level_2], 'k^', 'linewidth', 2);
+    plot3(x_cm(2), y_cm(2), [level_2, level_2], 'ksquare', 'linewidth', 2);
+    plot3(x_vc_a, y_vc_a, z_vc, 'k-^', 'linewidth', 1); hold on;
+    plot3(x_vc_b, y_vc_b, z_vc, 'k-^', 'linewidth', 1); hold on;
+    plot3([x_ch_p, x_ct_p], [y_ch_p, y_ct_p], [level_4, level_4], 'k-o', 'linewidth', 2); hold on;
+    
+    for i = 1:length(x_vc_a)-1
+        plot3([x_vc_a(i), x_vc_b(i)], [y_vc_a(i), y_vc_b(i)], [z_vc(i), z_vc(i)], 'c-^', 'linewidth', 2); hold on;
+    end
+    
+    for i = 1:length(x_cc)
+        plot3([x_cd2_d(i), x_ct_d(i)], [y_cd2_d(i), y_ct_d(i)], [z_vc(i), z_vc(i)], 'y-', 'linewidth', 3);
+    end
+    
+    % Left side legend list (matching loop2)
+    x_text = -10;
+    y_text = 30;
+    y_space = -2;
     box_level_1 = [box(1, 1:2:8), box(1, 1)]*0 + level_1;
-    for i = 1:size(box, 1)
-        plot3([box(i, 1:2:8), box(i, 1)], [box(i, 2:2:8), box(i, 2)], box_level_1, 'y-', 'linewidth', 1.2);
-        
-        center_x = (box(i, 1) + box(i, 5)) / 2;
-        center_y = (box(i, 2) + box(i, 6)) / 2;
-        text(center_x, center_y, level_1, num2str(i), ...
-            'BackgroundColor', box_color(i, :), 'fontsize', 8.5, 'FontWeight', 'bold', ...
-            'HorizontalAlignment', 'center', 'Color', [0, 0, 0]);
+    
+    for i = 1:length(box(:, 1))
+        text(x_text, y_text + i*y_space, text_list(i, :), 'BackgroundColor', box_color(i, :), 'fontsize', 8.5, 'FontWeight', 'bold');
+        plot3([box(i, 1:2:8), box(i, 1)], [box(i, 2:2:8), box(i, 2)], box_level_1, 'c-', 'linewidth', 2); hold on;
+        plot3([box(i, 1:2:8), box(i, 1)], [box(i, 2:2:8), box(i, 2)], box_level_1, 'k-', 'linewidth', 1); hold on;
     end
     
     view(0, 90); grid on; axis equal;
-    xlim([-5, n_wid + 5]); ylim([-2, n_len + 5]);
+    
+    % Box badges inside foot
+    for i = 1:length(box(:, 1))
+        center_x = (box(i, 1) + box(i, 3)) / 2;
+        center_y = (box(i, 4) + box(i, 6)) / 2;
+        text(center_x, center_y, level_1, text_list(i, 1:2), 'BackgroundColor', box_color(i, :), 'fontsize', 8, 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
+    end
+    
+    xlim([-14, n_wid + 4]);
+    ylim([-2, n_len + 3]);
+    
     title(sprintf('%s [%d] %d %d %d', strrep(tag, '_', '\_'), w, ratio_c(1), ratio_c(2), ratio_c(3)));
     saveas(fig, fullfile(out_paths.stage2_xy, sprintf('xy_box12_%s', tag)), 'jpg');
     close(fig);
