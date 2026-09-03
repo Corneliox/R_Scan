@@ -77,6 +77,14 @@ for c_idx = 1:length(scan_configs)
         folder_name = dir_folders(f).name;
         subj_folder_path = fullfile(target_dir, folder_name);
         
+        % Early filter check to avoid disk I/O on unselected subjects
+        if ~isempty(subject_filter)
+            candidate_ids = {folder_name, sprintf('%s_%s', current_side, folder_name), sprintf('R_%s', folder_name), sprintf('L_%s', folder_name)};
+            if isempty(intersect(candidate_ids, subject_filter))
+                continue;
+            end
+        end
+        
         % Check if folder has relevant measurement files
         folder_xls = dir(fullfile(subj_folder_path, '*.xls*'));
         if isempty(folder_xls)
@@ -101,10 +109,6 @@ function [subjects_info] = process_single_folder(subj_folder_path, folder_name, 
     for k = 1:length(file_names)
         fname = file_names{k};
         
-        % Match patterns like:
-        % '_1 Centre of Force line.xls', '1 Centre of Force.xls', '_1 Dynamic Roll off.xls'
-        % 'Centre of Force line_1.xls', 'Dynamic Maximum  Imagexx_2.xls'
-        % 'trial_1.xls', 'trial1.xls'
         tokens = regexp(fname, '^(_)?(\d+)\s+', 'tokens');
         if isempty(tokens)
             tokens = regexp(fname, '[_\s](\d+)\.(xls|xlsx)$', 'tokens');
@@ -144,24 +148,21 @@ function [subjects_info] = process_single_folder(subj_folder_path, folder_name, 
         return;
     end
     
-    % Check if this folder contains paired (bilateral Left & Right foot) measurements
-    is_paired = check_if_paired_folder(subj_folder_path, file_names);
+    % Detect foot laterality directly from Excel file headers
+    detected_sides = detect_sides_from_excel_files(subj_folder_path, file_names);
     
-    if is_paired && strcmpi(default_side, 'AUTO')
-        sides_to_add = {'L', 'R'};
-    elseif strcmpi(default_side, 'R')
+    if strcmpi(default_side, 'R')
         sides_to_add = {'R'};
     elseif strcmpi(default_side, 'L')
         sides_to_add = {'L'};
+    elseif startsWith(folder_name, 'R_', 'IgnoreCase', true)
+        sides_to_add = {'R'};
+    elseif startsWith(folder_name, 'L_', 'IgnoreCase', true)
+        sides_to_add = {'L'};
+    elseif ~isempty(detected_sides)
+        sides_to_add = detected_sides;
     else
-        % AUTO single side detection
-        if startsWith(folder_name, 'R_', 'IgnoreCase', true)
-            sides_to_add = {'R'};
-        elseif startsWith(folder_name, 'L_', 'IgnoreCase', true)
-            sides_to_add = {'L'};
-        else
-            sides_to_add = {'AUTO'};
-        end
+        sides_to_add = {'AUTO'};
     end
     
     clean_folder_name = folder_name;
@@ -201,11 +202,16 @@ function [subjects_info] = process_single_folder(subj_folder_path, folder_name, 
     end
 end
 
-function is_paired = check_if_paired_folder(subj_folder_path, file_names)
-    is_paired = false;
+function [detected_sides] = detect_sides_from_excel_files(subj_folder_path, file_names)
+    detected_sides = {};
     
-    % Find candidate files to inspect for paired indicators
-    cand_pats = {'.*Centre\s*of\s*Force.*\.xls.*', '.*Foot\s*Dimensions.*\.xls.*', '.*Impulse.*\.xls.*', '.*Entire\s*Plate.*\.xls.*'};
+    cand_pats = {
+        '.*Centre\s*of\s*Force.*\.xls.*', ...
+        '.*Dynamic\s*Roll.*\.xls.*', ...
+        '.*Foot\s*Dimensions.*\.xls.*', ...
+        '.*Impulse.*\.xls.*', ...
+        '.*Dynamic\s*Maximum.*\.xls.*'
+    };
     cand_files = {};
     for p = 1:length(cand_pats)
         m = ~cellfun(@isempty, regexpi(file_names, cand_pats{p}));
@@ -213,33 +219,63 @@ function is_paired = check_if_paired_folder(subj_folder_path, file_names)
     end
     cand_files = unique(cand_files);
     
+    has_left = false;
+    has_right = false;
+    
     for c = 1:length(cand_files)
         fp = fullfile(subj_folder_path, cand_files{c});
         fid = fopen(fp, 'r');
         if fid == -1, continue; end
         
-        has_left = false;
-        has_right = false;
-        line_count = 0;
-        
-        while ~feof(fid) && line_count < 2500
+        lines = {};
+        while ~feof(fid) && length(lines) < 200
             tline = fgetl(fid);
-            line_count = line_count + 1;
-            if ~ischar(tline), continue; end
-            
-            if ~isempty(regexpi(tline, '(Left\s+foot\s+data|Left\s+Foot\s+Frame|Left\s+rectangle\s+position|pressure\s+frame\s+Left)'))
-                has_left = true;
-            end
-            if ~isempty(regexpi(tline, '(Right\s+foot\s+data|Right\s+Foot\s+Frame|Right\s+rectangle\s+position|pressure\s+frame\s+Right)'))
-                has_right = true;
-            end
-            if has_left && has_right
-                is_paired = true;
-                break;
+            if ischar(tline)
+                lines{end+1} = strtrim(tline); %#ok<AGROW>
             end
         end
         fclose(fid);
         
-        if is_paired, return; end
+        if isempty(lines), continue; end
+        
+        % Check for Left foot data
+        left_idx = find(~cellfun(@isempty, regexpi(lines, '(Left\s+foot\s+data|Left\s+rectangle\s+position|Left\s+Foot\s+Frame|pressure\s+frame\s+Left)')), 1);
+        if ~isempty(left_idx)
+            l_active = false;
+            for k = left_idx:min(length(lines), left_idx + 15)
+                if ~isempty(regexpi(lines{k}, 'Rectangle\s+width')) && k < length(lines)
+                    w = str2double(lines{k+1});
+                    if ~isnan(w) && w > 0, l_active = true; end
+                end
+            end
+            if l_active || isempty(find(~cellfun(@isempty, regexpi(lines, 'Rectangle\s+width')), 1))
+                has_left = true;
+            end
+        end
+        
+        % Check for Right foot data
+        right_idx = find(~cellfun(@isempty, regexpi(lines, '(Right\s+foot\s+data|Right\s+rectangle\s+position|Right\s+Foot\s+Frame|pressure\s+frame\s+Right)')), 1);
+        if ~isempty(right_idx)
+            r_active = false;
+            for k = right_idx:min(length(lines), right_idx + 15)
+                if ~isempty(regexpi(lines{k}, 'Rectangle\s+width')) && k < length(lines)
+                    w = str2double(lines{k+1});
+                    if ~isnan(w) && w > 0, r_active = true; end
+                end
+            end
+            if r_active || isempty(find(~cellfun(@isempty, regexpi(lines, 'Rectangle\s+width')), 1))
+                has_right = true;
+            end
+        end
+        
+        if has_left && has_right, break; end
+    end
+    
+    if has_left && has_right
+        detected_sides = {'L', 'R'};
+    elseif has_right
+        detected_sides = {'R'};
+    elseif has_left
+        detected_sides = {'L'};
     end
 end

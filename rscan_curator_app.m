@@ -332,7 +332,19 @@ scan_output_directory();
         [n_len, n_wid] = size(app_state.map_level_max);
         
         is_foot_right = false;
-        if startsWith(tag, 'R_', 'IgnoreCase', true)
+        side_file = fullfile(app_state.out_paths.stage1_level, sprintf('side_%s.txt', tag));
+        if exist(side_file, 'file')
+            fid_s = fopen(side_file, 'r');
+            if fid_s ~= -1
+                s_val = strtrim(fgetl(fid_s));
+                fclose(fid_s);
+                if strcmpi(s_val, 'R')
+                    is_foot_right = true;
+                elseif strcmpi(s_val, 'L')
+                    is_foot_right = false;
+                end
+            end
+        elseif startsWith(tag, 'R_', 'IgnoreCase', true)
             is_foot_right = true;
         elseif startsWith(tag, 'L_', 'IgnoreCase', true)
             is_foot_right = false;

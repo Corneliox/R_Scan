@@ -124,8 +124,17 @@ for t_idx = 1:length(subject_info.trial_nums)
     end
     
     % --- 5. Save Outputs ---
-    save(fullfile(out_paths.stage1_level, sprintf('map_level_%s.mat', trial_tag)), 'map_level');
+    side_str = 'L';
+    if is_right, side_str = 'R'; end
+    
+    save(fullfile(out_paths.stage1_level, sprintf('map_level_%s.mat', trial_tag)), 'map_level', 'side_str');
     save(fullfile(out_paths.stage1_level, sprintf('map_level_max_%s.txt', trial_tag)), 'map_level_max', '-ascii');
+    
+    fid_side = fopen(fullfile(out_paths.stage1_level, sprintf('side_%s.txt', trial_tag)), 'w');
+    if fid_side ~= -1
+        fprintf(fid_side, '%s\n', side_str);
+        fclose(fid_side);
+    end
     
     % Visual Map Plot
     fig = figure('Visible', 'off');

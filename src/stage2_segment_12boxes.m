@@ -127,9 +127,21 @@ for w = 1:length(trial_tags)
             end
         end
         
-        % Determine Foot Laterality (Strict Prefix Check: 'L_' vs 'R_')
+        % Determine Foot Laterality (Priority 1: side_*.txt from Excel, Priority 2: Prefix, Priority 3: Morphology)
         is_foot_right = false;
-        if startsWith(tag, 'R_', 'IgnoreCase', true)
+        side_file = fullfile(out_paths.stage1_level, sprintf('side_%s.txt', tag));
+        if exist(side_file, 'file')
+            fid_s = fopen(side_file, 'r');
+            if fid_s ~= -1
+                s_val = strtrim(fgetl(fid_s));
+                fclose(fid_s);
+                if strcmpi(s_val, 'R')
+                    is_foot_right = true;
+                elseif strcmpi(s_val, 'L')
+                    is_foot_right = false;
+                end
+            end
+        elseif startsWith(tag, 'R_', 'IgnoreCase', true)
             is_foot_right = true;
         elseif startsWith(tag, 'L_', 'IgnoreCase', true)
             is_foot_right = false;
@@ -262,9 +274,20 @@ for w = 1:length(trial_tags)
     x_cm = [(x_a(1)+x_b(1))/2, (x_a(2)+x_b(2))/2];
     y_cm = [(y_a(1)+y_b(1))/2, (y_a(2)+y_b(2))/2];
     
-    ploy_a  = polyfit(x_a, y_a, 1);
-    ploy_b  = polyfit(x_b, y_b, 1);
-    ploy_cm = polyfit(x_cm, y_cm, 1);
+    % Direction vector of Central Line CM
+    v_cm = [x_cm(2) - x_cm(1), y_cm(2) - y_cm(1)];
+    if norm(v_cm) == 0
+        v_cm = [0, 1];
+    end
+    % Perpendicular normal to central line
+    n_cm = [-v_cm(2), v_cm(1)];
+    if norm(n_cm) > 0
+        n_cm = n_cm / norm(n_cm);
+    end
+    
+    % Direction vector of Line A (Medial) and Line B (Lateral)
+    v_a = [x_a(2) - x_a(1), y_a(2) - y_a(1)];
+    v_b = [x_b(2) - x_b(1), y_b(2) - y_b(1)];
     
     % Longitudinal divisions between heel (cd3) and MT base (cd1)
     x_cd2_p = (x_ch_p - x_cd1_p)/3 + x_cd1_p;
@@ -279,23 +302,29 @@ for w = 1:length(trial_tags)
     x_vc_b = zeros(1, length(x_c)); y_vc_b = zeros(1, length(x_c));
     
     for i = 1:length(x_c)
-        constant_vc = ploy_cm(1)*y_c(i) + x_c(i);
-        ploy_vc = [-1/ploy_cm(1), constant_vc/ploy_cm(1)];
+        c_pt = [x_c(i), y_c(i)];
         
-        function_vc_a = [-ploy_a(1), 1; -ploy_vc(1), 1];
-        constant_vc_a = [ploy_a(2); ploy_vc(2)];
-        if abs(det(function_vc_a)) > 1e-12
-            vc_a = function_vc_a \ constant_vc_a;
+        % Robust Parametric Intersect with Line A (Medial):
+        % P_a1 + s * v_a = c_pt + t * n_cm  =>  [v_a, -n_cm] * [s; t] = c_pt - P_a1
+        p_a1 = [x_a(1), y_a(1)];
+        M_a = [v_a(1), -n_cm(1); v_a(2), -n_cm(2)];
+        rhs_a = [c_pt(1) - p_a1(1); c_pt(2) - p_a1(2)];
+        if abs(det(M_a)) > 1e-12
+            st_a = M_a \ rhs_a;
+            vc_a = p_a1 + st_a(1) * v_a;
         else
-            vc_a = [x_a(1); y_c(i)];
+            vc_a = [x_a(1), y_c(i)];
         end
         
-        function_vc_b = [-ploy_b(1), 1; -ploy_vc(1), 1];
-        constant_vc_b = [ploy_b(2); ploy_vc(2)];
-        if abs(det(function_vc_b)) > 1e-12
-            vc_b = function_vc_b \ constant_vc_b;
+        % Robust Parametric Intersect with Line B (Lateral):
+        p_b1 = [x_b(1), y_b(1)];
+        M_b = [v_b(1), -n_cm(1); v_b(2), -n_cm(2)];
+        rhs_b = [c_pt(1) - p_b1(1); c_pt(2) - p_b1(2)];
+        if abs(det(M_b)) > 1e-12
+            st_b = M_b \ rhs_b;
+            vc_b = p_b1 + st_b(1) * v_b;
         else
-            vc_b = [x_b(1); y_c(i)];
+            vc_b = [x_b(1), y_c(i)];
         end
         
         x_vc_a(i) = vc_a(1); y_vc_a(i) = vc_a(2);

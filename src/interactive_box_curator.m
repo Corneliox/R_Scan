@@ -1,4 +1,4 @@
-﻿function interactive_box_curator(tag, out_paths, ratio_c)
+function interactive_box_curator(tag, out_paths, ratio_c)
 % INTERACTIVE_BOX_CURATOR - Interactive Visual Studio for 12-Box Geometric Curation
 %
 % Allows researchers to visually inspect, fine-tune, and drag landmark handles
@@ -21,9 +21,21 @@ end
 map_level_max = load(max_txt_path);
 [n_len, n_wid] = size(map_level_max);
 
-% Determine foot laterality
+% Determine foot laterality (Priority 1: side_*.txt from Excel, Priority 2: Prefix, Priority 3: Morphology)
 is_foot_right = false;
-if startsWith(tag, 'R_', 'IgnoreCase', true)
+side_file = fullfile(out_paths.stage1_level, sprintf('side_%s.txt', tag));
+if exist(side_file, 'file')
+    fid_s = fopen(side_file, 'r');
+    if fid_s ~= -1
+        s_val = strtrim(fgetl(fid_s));
+        fclose(fid_s);
+        if strcmpi(s_val, 'R')
+            is_foot_right = true;
+        elseif strcmpi(s_val, 'L')
+            is_foot_right = false;
+        end
+    end
+elseif startsWith(tag, 'R_', 'IgnoreCase', true)
     is_foot_right = true;
 elseif startsWith(tag, 'L_', 'IgnoreCase', true)
     is_foot_right = false;
