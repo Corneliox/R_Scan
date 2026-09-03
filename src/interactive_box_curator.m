@@ -404,7 +404,6 @@ redraw_plot();
         view(0, 90); grid on; axis equal;
         xlim([-14, n_wid + 4]); ylim([-2, n_len + 3]);
         title(hAx, sprintf('%s (Click and Drag Circles to Curate)', strrep(tag, '_', '\_')), 'FontWeight', 'bold');
-        drawnow;
     end
 
 end

@@ -41,6 +41,8 @@ app_state.active_handle_idx = -1;
 app_state.handles_xy = zeros(6, 2);
 app_state.ratio_c = [30, 20, 20];
 app_state.is_foot_right = false;
+app_state.is_flipped = false;
+app_state.is_busy = false;
 app_state.map_level_max = [];
 app_state.xy_cop_i100 = [];
 app_state.current_box = [];
@@ -190,23 +192,35 @@ hTxtCurHandle = uicontrol(hFig, 'Style', 'text', 'String', 'Active Handle: (None
                           'BackgroundColor', c_panel, 'HorizontalAlignment', 'left');
 
 hTxtRamSummary = uicontrol(hFig, 'Style', 'text', 'String', 'Modified in RAM: 0 trials', ...
-                           'Units', 'pixels', 'Position', [695, 290, 330, 20], ...
+                           'Units', 'pixels', 'Position', [695, 295, 330, 20], ...
                            'FontName', font_main, 'FontSize', 8.5, 'FontWeight', 'bold', ...
                            'ForegroundColor', [0.7, 0.4, 0.1], 'BackgroundColor', c_panel, ...
                            'HorizontalAlignment', 'left');
 
 uicontrol(hFig, 'Style', 'pushbutton', 'String', '↺  Reset Current Trial to Auto Baseline', ...
-          'Units', 'pixels', 'Position', [695, 230, 330, 30], ...
-          'FontName', font_main, 'FontSize', 9, ...
+          'Units', 'pixels', 'Position', [695, 260, 330, 28], ...
+          'FontName', font_main, 'FontSize', 8.5, ...
           'Callback', @on_reset_trial_auto);
 
+hTxtOrientation = uicontrol(hFig, 'Style', 'text', 'String', 'Orientation: Normal (Raw Sensor)', ...
+                            'Units', 'pixels', 'Position', [695, 226, 330, 20], ...
+                            'FontName', font_main, 'FontSize', 8.5, 'FontWeight', 'bold', ...
+                            'ForegroundColor', [0.2, 0.55, 0.2], 'BackgroundColor', c_panel, ...
+                            'HorizontalAlignment', 'left');
+
+hBtnFlip = uicontrol(hFig, 'Style', 'pushbutton', 'String', '⇄  Flip Horizontal (Fix Stepping Side)', ...
+                     'Units', 'pixels', 'Position', [695, 190, 330, 32], ...
+                     'FontName', font_main, 'FontSize', 9, 'FontWeight', 'bold', ...
+                     'BackgroundColor', [0.45, 0.4, 0.6], 'ForegroundColor', [1, 1, 1], ...
+                     'Callback', @on_flip_horizontal);
+
 uicontrol(hFig, 'Style', 'pushbutton', 'String', '📁  Save Curations Only (No Pipeline Run)', ...
-          'Units', 'pixels', 'Position', [695, 140, 330, 32], ...
+          'Units', 'pixels', 'Position', [695, 142, 330, 32], ...
           'FontName', font_main, 'FontSize', 9, ...
           'Callback', @(~, ~) save_and_repair_pipeline(false));
 
 uicontrol(hFig, 'Style', 'pushbutton', 'String', '🚀  SAVE & REPAIR (Stage 3-6)', ...
-          'Units', 'pixels', 'Position', [695, 85, 330, 48], ...
+          'Units', 'pixels', 'Position', [695, 85, 330, 50], ...
           'FontName', font_main, 'FontSize', 10.5, 'FontWeight', 'bold', ...
           'BackgroundColor', c_repair, 'ForegroundColor', [1, 1, 1], ...
           'Callback', @(~, ~) save_and_repair_pipeline(true));
@@ -313,6 +327,8 @@ scan_output_directory();
         if isempty(app_state.trial_list) || trial_idx < 1 || trial_idx > length(app_state.trial_list)
             return;
         end
+        if app_state.is_busy, return; end
+        app_state.is_busy = true;
         
         app_state.current_idx = trial_idx;
         tag = app_state.trial_list{trial_idx};
@@ -325,6 +341,7 @@ scan_output_directory();
             max_file = fullfile(app_state.out_paths.root, sprintf('map_level_max_%s.txt', tag));
         end
         if ~exist(max_file, 'file')
+            app_state.is_busy = false;
             return;
         end
         
@@ -365,8 +382,27 @@ scan_output_directory();
             cached = app_state.ram_buffer(tag);
             anatomy_p = cached.anatomy_p;
             app_state.ratio_c = cached.ratio_c;
+            if isfield(cached, 'is_flipped'), app_state.is_flipped = cached.is_flipped; end
+            if isfield(cached, 'is_foot_right'), app_state.is_foot_right = cached.is_foot_right; end
+            if isfield(cached, 'map_level_max'), app_state.map_level_max = cached.map_level_max; end
+            if isfield(cached, 'xy_cop_i100'), app_state.xy_cop_i100 = cached.xy_cop_i100; end
+            if isfield(cached, 'handles_xy'), app_state.handles_xy = cached.handles_xy; end
             set(hTxtModifiedBadge, 'String', 'Status: ✍️ Modified in RAM (Unsaved)', 'ForegroundColor', [0.8, 0.4, 0.1]);
         else
+            flip_file = fullfile(app_state.out_paths.stage1_level, sprintf('flip_status_%s.txt', tag));
+            is_flipped = false;
+            if exist(flip_file, 'file')
+                fid_f = fopen(flip_file, 'r');
+                if fid_f ~= -1
+                    f_line = strtrim(fgetl(fid_f));
+                    fclose(fid_f);
+                    if strcmpi(f_line, 'FLIPPED')
+                        is_flipped = true;
+                    end
+                end
+            end
+            app_state.is_flipped = is_flipped;
+            
             anatomy_file = fullfile(app_state.out_paths.stage2_xy, sprintf('anatomy_p_%s.txt', tag));
             if ~exist(anatomy_file, 'file')
                 anatomy_file = fullfile(app_state.out_paths.root, sprintf('anatomy_p_%s.txt', tag));
@@ -380,64 +416,67 @@ scan_output_directory();
                 set(hTxtModifiedBadge, 'String', 'Status: 🤖 Auto-Generated Baseline', 'ForegroundColor', [0.3, 0.6, 0.3]);
             end
             app_state.ratio_c = [30, 20, 20];
-        end
-        
-        app_state.xy_cop_i100 = [];
-        mat_path = fullfile(app_state.out_paths.stage1_level, sprintf('map_level_%s.mat', tag));
-        if exist(mat_path, 'file')
-            ld = load(mat_path);
-            map_3d = ld.map_level;
-            n_f = size(map_3d, 3);
-            raw_cop = zeros(n_f, 2);
-            [gc, gr] = meshgrid(1:size(map_3d, 2), 1:size(map_3d, 1));
-            for f_i = 1:n_f
-                fm = map_3d(:, :, f_i);
-                sf = sum(fm(:));
-                if sf > 0
-                    raw_cop(f_i, 1) = sum(sum(fm .* gc)) / sf;
-                    raw_cop(f_i, 2) = sum(sum(fm .* gr)) / sf;
+            
+            app_state.xy_cop_i100 = [];
+            mat_path = fullfile(app_state.out_paths.stage1_level, sprintf('map_level_%s.mat', tag));
+            if exist(mat_path, 'file')
+                ld = load(mat_path);
+                map_3d = ld.map_level;
+                n_f = size(map_3d, 3);
+                raw_cop = zeros(n_f, 2);
+                [gc, gr] = meshgrid(1:size(map_3d, 2), 1:size(map_3d, 1));
+                for f_i = 1:n_f
+                    fm = map_3d(:, :, f_i);
+                    sf = sum(fm(:));
+                    if sf > 0
+                        raw_cop(f_i, 1) = sum(sum(fm .* gc)) / sf;
+                        raw_cop(f_i, 2) = sum(sum(fm .* gr)) / sf;
+                    end
+                end
+                vc = raw_cop(raw_cop(:, 1) > 0 & raw_cop(:, 2) > 0, :);
+                if size(vc, 1) >= 5
+                    app_state.xy_cop_i100 = interp1(linspace(0, 100, size(vc, 1))', vc, linspace(0, 100, 101)', 'linear');
                 end
             end
-            vc = raw_cop(raw_cop(:, 1) > 0 & raw_cop(:, 2) > 0, :);
-            if size(vc, 1) >= 5
-                app_state.xy_cop_i100 = interp1(linspace(0, 100, size(vc, 1))', vc, linspace(0, 100, 101)', 'linear');
+            if isempty(app_state.xy_cop_i100)
+                app_state.xy_cop_i100 = [
+                    linspace(anatomy_p(3, 1), anatomy_p(3, 2), 101)', ...
+                    linspace(anatomy_p(3, 3), anatomy_p(3, 4), 101)'
+                ];
             end
-        end
-        if isempty(app_state.xy_cop_i100)
-            app_state.xy_cop_i100 = [
-                linspace(anatomy_p(3, 1), anatomy_p(3, 2), 101)', ...
-                linspace(anatomy_p(3, 3), anatomy_p(3, 4), 101)'
+            
+            app_state.handles_xy = [
+                anatomy_p(1, 2), anatomy_p(1, 4); ...
+                anatomy_p(2, 2), anatomy_p(2, 4); ...
+                anatomy_p(1, 1), anatomy_p(1, 3); ...
+                anatomy_p(2, 1), anatomy_p(2, 3); ...
+                anatomy_p(3, 2), anatomy_p(3, 4); ...
+                anatomy_p(3, 1), anatomy_p(3, 3)
             ];
         end
         
-        app_state.handles_xy = [
-            anatomy_p(1, 2), anatomy_p(1, 4); ...
-            anatomy_p(2, 2), anatomy_p(2, 4); ...
-            anatomy_p(1, 1), anatomy_p(1, 3); ...
-            anatomy_p(2, 1), anatomy_p(2, 3); ...
-            anatomy_p(3, 2), anatomy_p(3, 4); ...
-            anatomy_p(3, 1), anatomy_p(3, 3)
-        ];
-        
+        update_orientation_label();
         set(hEditRatioApp, 'String', sprintf('%d, %d, %d', app_state.ratio_c(1), app_state.ratio_c(2), app_state.ratio_c(3)));
         update_ram_summary_label();
         redraw_canvas();
+        app_state.is_busy = false;
     end
 
     function redraw_canvas()
-        cla(hAx);
-        axes(hAx);
-        
         if isempty(app_state.map_level_max)
+            cla(hAx);
             return;
         end
         
-        surf(app_state.map_level_max); hold on;
+        cla(hAx);
+        hold(hAx, 'on');
+        
+        surf(hAx, app_state.map_level_max);
         
         x_copi = app_state.xy_cop_i100(:, 1); y_copi = app_state.xy_cop_i100(:, 2);
         cop_zi = x_copi(:, 1).*0 + 90;
-        plot3(x_copi, y_copi, cop_zi, 'w', 'linewidth', 3); hold on; grid on;
-        plot3(x_copi, y_copi, cop_zi, 'r.-', 'linewidth', 1); hold on; grid on;
+        plot3(hAx, x_copi, y_copi, cop_zi, 'w', 'linewidth', 3);
+        plot3(hAx, x_copi, y_copi, cop_zi, 'r.-', 'linewidth', 1);
         
         cur_p = [
             app_state.handles_xy(3, 1), app_state.handles_xy(1, 1), app_state.handles_xy(3, 2), app_state.handles_xy(1, 2); ...
@@ -451,35 +490,82 @@ scan_output_directory();
         
         box_level_1 = [box(1, 1:2:8), box(1, 1)]*0 + 90;
         for b_i = 1:size(box, 1)
-            plot3([box(b_i, 1:2:8), box(b_i, 1)], [box(b_i, 2:2:8), box(b_i, 2)], box_level_1, 'c-', 'linewidth', 2); hold on;
-            plot3([box(b_i, 1:2:8), box(b_i, 1)], [box(b_i, 2:2:8), box(b_i, 2)], box_level_1, 'k-', 'linewidth', 1); hold on;
+            plot3(hAx, [box(b_i, 1:2:8), box(b_i, 1)], [box(b_i, 2:2:8), box(b_i, 2)], box_level_1, 'c-', 'linewidth', 2);
+            plot3(hAx, [box(b_i, 1:2:8), box(b_i, 1)], [box(b_i, 2:2:8), box(b_i, 2)], box_level_1, 'k-', 'linewidth', 1);
             
             center_x = (box(b_i, 1) + box(b_i, 3)) / 2;
             center_y = (box(b_i, 4) + box(b_i, 6)) / 2;
-            text(center_x, center_y, 90, text_list(b_i, 1:2), ...
+            text(hAx, center_x, center_y, 90, text_list(b_i, 1:2), ...
                 'BackgroundColor', box_color(b_i, :), 'fontsize', 8, 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
         end
         
-        plot3(app_state.handles_xy(1:2, 1), app_state.handles_xy(1:2, 2), [95, 95], 'co', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 0.9, 0.9]);
-        plot3(app_state.handles_xy(3:4, 1), app_state.handles_xy(3:4, 2), [95, 95], 'yo', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [1, 1, 0]);
-        plot3(app_state.handles_xy(5:6, 1), app_state.handles_xy(5:6, 2), [95, 95], 'go', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 1, 0]);
+        plot3(hAx, app_state.handles_xy(1:2, 1), app_state.handles_xy(1:2, 2), [95, 95], 'co', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 0.9, 0.9]);
+        plot3(hAx, app_state.handles_xy(3:4, 1), app_state.handles_xy(3:4, 2), [95, 95], 'yo', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [1, 1, 0]);
+        plot3(hAx, app_state.handles_xy(5:6, 1), app_state.handles_xy(5:6, 2), [95, 95], 'go', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 1, 0]);
         
-        plot3([app_state.handles_xy(3, 1), app_state.handles_xy(1, 1)], [app_state.handles_xy(3, 2), app_state.handles_xy(1, 2)], [92, 92], 'y--', 'LineWidth', 1.2);
-        plot3([app_state.handles_xy(4, 1), app_state.handles_xy(2, 1)], [app_state.handles_xy(4, 2), app_state.handles_xy(2, 2)], [92, 92], 'y--', 'LineWidth', 1.2);
-        plot3([app_state.handles_xy(6, 1), app_state.handles_xy(5, 1)], [app_state.handles_xy(6, 2), app_state.handles_xy(5, 2)], [92, 92], 'k-', 'LineWidth', 1.8);
+        plot3(hAx, [app_state.handles_xy(3, 1), app_state.handles_xy(1, 1)], [app_state.handles_xy(3, 2), app_state.handles_xy(1, 2)], [92, 92], 'y--', 'LineWidth', 1.2);
+        plot3(hAx, [app_state.handles_xy(4, 1), app_state.handles_xy(2, 1)], [app_state.handles_xy(4, 2), app_state.handles_xy(2, 2)], [92, 92], 'y--', 'LineWidth', 1.2);
+        plot3(hAx, [app_state.handles_xy(6, 1), app_state.handles_xy(5, 1)], [app_state.handles_xy(6, 2), app_state.handles_xy(5, 2)], [92, 92], 'k-', 'LineWidth', 1.8);
         
         x_text = -10; y_text = 30; y_space = -2;
         for i = 1:12
-            text(x_text, y_text + i*y_space, text_list(i, :), 'BackgroundColor', box_color(i, :), 'fontsize', 8.5, 'FontWeight', 'bold');
+            text(hAx, x_text, y_text + i*y_space, text_list(i, :), 'BackgroundColor', box_color(i, :), 'fontsize', 8.5, 'FontWeight', 'bold');
         end
         
         [n_len, n_wid] = size(app_state.map_level_max);
-        view(0, 90); grid on; axis equal;
-        xlim([-14, n_wid + 4]); ylim([-2, n_len + 3]);
+        view(hAx, 0, 90); grid(hAx, 'on'); axis(hAx, 'equal');
+        xlim(hAx, [-14, n_wid + 4]); ylim(hAx, [-2, n_len + 3]);
         
         tag = app_state.trial_list{app_state.current_idx};
-        title(hAx, sprintf('%s (Drag Circles to Curate)', strrep(tag, '_', '\_')), 'FontWeight', 'bold');
-        drawnow;
+        side_label = 'Left Foot';
+        if app_state.is_foot_right, side_label = 'Right Foot'; end
+        title(hAx, sprintf('%s [%s] (Drag Circles to Curate)', strrep(tag, '_', '\_'), side_label), 'FontWeight', 'bold');
+    end
+
+    function on_flip_horizontal(~, ~)
+        if isempty(app_state.trial_list) || isempty(app_state.map_level_max)
+            return;
+        end
+        
+        % Invert flip state
+        app_state.is_flipped = ~app_state.is_flipped;
+        app_state.is_foot_right = ~app_state.is_foot_right;
+        
+        % Flip 2D peak matrix
+        app_state.map_level_max = fliplr(app_state.map_level_max);
+        n_wid = size(app_state.map_level_max, 2);
+        
+        % Flip COP
+        if ~isempty(app_state.xy_cop_i100)
+            app_state.xy_cop_i100(:, 1) = (n_wid + 1) - app_state.xy_cop_i100(:, 1);
+        end
+        
+        % Flip handles X
+        app_state.handles_xy(:, 1) = (n_wid + 1) - app_state.handles_xy(:, 1);
+        
+        % Swap Forefoot handles: Medial (1) <-> Lateral (2)
+        tmp = app_state.handles_xy(1, :);
+        app_state.handles_xy(1, :) = app_state.handles_xy(2, :);
+        app_state.handles_xy(2, :) = tmp;
+        
+        % Swap Heel handles: Medial (3) <-> Lateral (4)
+        tmp = app_state.handles_xy(3, :);
+        app_state.handles_xy(3, :) = app_state.handles_xy(4, :);
+        app_state.handles_xy(4, :) = tmp;
+        
+        update_orientation_label();
+        cache_current_trial_to_ram();
+        redraw_canvas();
+    end
+
+    function update_orientation_label()
+        if app_state.is_flipped
+            set(hTxtOrientation, 'String', 'Orientation: ⇄ FLIPPED (Inverted Side)', ...
+                'ForegroundColor', [0.85, 0.35, 0.1]);
+        else
+            set(hTxtOrientation, 'String', 'Orientation: Normal (Raw Sensor)', ...
+                'ForegroundColor', [0.2, 0.55, 0.2]);
+        end
     end
 
     function on_mouse_down(~, ~)
@@ -531,10 +617,15 @@ scan_output_directory();
         box = compute_boxes_from_anatomy(cur_p, app_state.ratio_c);
         
         cached_entry = struct();
-        cached_entry.anatomy_p = cur_p;
-        cached_entry.box = box;
-        cached_entry.ratio_c = app_state.ratio_c;
-        cached_entry.is_modified = true;
+        cached_entry.anatomy_p     = cur_p;
+        cached_entry.box           = box;
+        cached_entry.ratio_c       = app_state.ratio_c;
+        cached_entry.is_modified   = true;
+        cached_entry.is_flipped    = app_state.is_flipped;
+        cached_entry.is_foot_right = app_state.is_foot_right;
+        cached_entry.map_level_max = app_state.map_level_max;
+        cached_entry.xy_cop_i100   = app_state.xy_cop_i100;
+        cached_entry.handles_xy    = app_state.handles_xy;
         
         app_state.ram_buffer(tag) = cached_entry;
         
@@ -579,7 +670,16 @@ scan_output_directory();
         
         for m_i = 1:length(subj_matches)
             m_tag = subj_matches{m_i};
-            cached_entry = struct('anatomy_p', cur_p, 'box', box, 'ratio_c', app_state.ratio_c, 'is_modified', true);
+            cached_entry = struct();
+            cached_entry.anatomy_p     = cur_p;
+            cached_entry.box           = box;
+            cached_entry.ratio_c       = app_state.ratio_c;
+            cached_entry.is_modified   = true;
+            cached_entry.is_flipped    = app_state.is_flipped;
+            cached_entry.is_foot_right = app_state.is_foot_right;
+            cached_entry.map_level_max = app_state.map_level_max;
+            cached_entry.xy_cop_i100   = app_state.xy_cop_i100;
+            cached_entry.handles_xy    = app_state.handles_xy;
             app_state.ram_buffer(m_tag) = cached_entry;
             if ~ismember(m_tag, app_state.modified_tags)
                 app_state.modified_tags{end+1} = m_tag;
@@ -620,6 +720,7 @@ scan_output_directory();
     end
 
     function navigate_trial(step)
+        if app_state.is_busy, return; end
         new_idx = app_state.current_idx + step;
         if new_idx >= 1 && new_idx <= length(app_state.trial_list)
             load_trial_view(new_idx);
@@ -627,6 +728,7 @@ scan_output_directory();
     end
 
     function on_popup_jump(~, ~)
+        if app_state.is_busy, return; end
         sel = get(hPopupTrials, 'Value');
         load_trial_view(sel);
     end
@@ -639,13 +741,60 @@ scan_output_directory();
         
         num_mod = length(app_state.modified_tags);
         set(hTxtBottomStatus, 'String', sprintf('Saving %d modified trial(s) to disk...', num_mod), 'ForegroundColor', [0.1, 0.3, 0.7]);
-        drawnow;
         
         modified_subjects = {};
         for m = 1:num_mod
             m_tag = app_state.modified_tags{m};
             cached = app_state.ram_buffer(m_tag);
             
+            % 1. Handle Flip Status & Synchronize 3D / 2D matrices
+            flip_file = fullfile(app_state.out_paths.stage1_level, sprintf('flip_status_%s.txt', m_tag));
+            disk_flipped = false;
+            if exist(flip_file, 'file')
+                fid_chk = fopen(flip_file, 'r');
+                if fid_chk ~= -1
+                    chk_str = strtrim(fgetl(fid_chk));
+                    fclose(fid_chk);
+                    disk_flipped = strcmpi(chk_str, 'FLIPPED');
+                end
+            end
+            
+            target_flipped = isfield(cached, 'is_flipped') && cached.is_flipped;
+            
+            if target_flipped ~= disk_flipped
+                mat_f = fullfile(app_state.out_paths.stage1_level, sprintf('map_level_%s.mat', m_tag));
+                if exist(mat_f, 'file')
+                    ld_mat = load(mat_f);
+                    if isfield(ld_mat, 'map_level')
+                        ld_mat.map_level = flip(ld_mat.map_level, 2);
+                        if isfield(cached, 'is_foot_right')
+                            if cached.is_foot_right, ld_mat.side_str = 'R'; else, ld_mat.side_str = 'L'; end
+                        end
+                        save(mat_f, '-struct', 'ld_mat');
+                    end
+                end
+                
+                if isfield(cached, 'map_level_max') && ~isempty(cached.map_level_max)
+                    mlm = cached.map_level_max;
+                    save(fullfile(app_state.out_paths.stage1_level, sprintf('map_level_max_%s.txt', m_tag)), 'mlm', '-ascii');
+                end
+                
+                if isfield(cached, 'is_foot_right')
+                    fid_s = fopen(fullfile(app_state.out_paths.stage1_level, sprintf('side_%s.txt', m_tag)), 'w');
+                    if fid_s ~= -1
+                        if cached.is_foot_right, fprintf(fid_s, 'R\n'); else, fprintf(fid_s, 'L\n'); end
+                        fclose(fid_s);
+                    end
+                end
+                
+                fid_fl = fopen(flip_file, 'w');
+                if fid_fl ~= -1
+                    if target_flipped, fprintf(fid_fl, 'FLIPPED\n'); else, fprintf(fid_fl, 'NORMAL\n'); end
+                    fclose(fid_fl);
+                end
+            end
+            
+            % 2. Save anatomy_p and xy_box12
             cur_anatomy = cached.anatomy_p;
             save(fullfile(app_state.out_paths.stage2_xy, sprintf('anatomy_p_%s.txt', m_tag)), 'cur_anatomy', '-ascii');
             save(fullfile(app_state.out_paths.root, sprintf('anatomy_p_%s.txt', m_tag)), 'cur_anatomy', '-ascii');

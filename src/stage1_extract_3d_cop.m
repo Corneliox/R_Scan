@@ -136,6 +136,12 @@ for t_idx = 1:length(subject_info.trial_nums)
         fclose(fid_side);
     end
     
+    fid_flip = fopen(fullfile(out_paths.stage1_level, sprintf('flip_status_%s.txt', trial_tag)), 'w');
+    if fid_flip ~= -1
+        fprintf(fid_flip, 'NORMAL\n');
+        fclose(fid_flip);
+    end
+    
     % Visual Map Plot
     fig = figure('Visible', 'off');
     surf(map_level_max); hold on;
@@ -403,10 +409,6 @@ function [map_level, num_frames] = parse_roll_off_file(roll_path, is_right, grid
             end
         end
         
-        if is_right
-            a = fliplr(a);
-        end
-        
         map_level(:, :, f_i) = a;
     end
     
@@ -459,9 +461,6 @@ function [map_level_max] = parse_max_image_file(max_path, is_right, fallback_len
     end
     
     if ~isempty(matrix_rows) && size(matrix_rows, 1) >= 10
-        if is_right
-            matrix_rows = fliplr(matrix_rows);
-        end
         map_level_max = matrix_rows;
     end
 end
