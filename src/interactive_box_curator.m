@@ -130,16 +130,26 @@ text_list = [
 % Handle 2: Lateral Forefoot (MT 4-5) -> [anatomy_p(2, 2), anatomy_p(2, 4)]
 % Handle 3: Medial Heel -> [anatomy_p(1, 1), anatomy_p(1, 3)]
 % Handle 4: Lateral Heel -> [anatomy_p(2, 1), anatomy_p(2, 3)]
-% Handle 5: Toe Apex -> [anatomy_p(3, 2), anatomy_p(3, 4)]
-% Handle 6: Heel Base -> [anatomy_p(3, 1), anatomy_p(3, 3)]
+% Handle 5: Toe Midline (Between 2 & 3) -> [anatomy_p(3, 2), anatomy_p(3, 4)]
+% Handle 6: Heel Midline (Between 11 & 12) -> [anatomy_p(3, 1), anatomy_p(3, 3)]
+% Handle 7: Lateral Cross (Tilt of Block 8 & 4) -> [anatomy_p(5, 1), anatomy_p(5, 2)]
+
+init_box = compute_boxes_from_anatomy(anatomy_p, ratio_c);
+cross_hx = init_box(8, 1);
+cross_hy = init_box(8, 2);
+if size(anatomy_p, 1) >= 5 && ~isnan(anatomy_p(5, 2)) && anatomy_p(5, 2) > 0
+    cross_hx = anatomy_p(5, 1);
+    cross_hy = anatomy_p(5, 2);
+end
 
 handles_xy = [
-    anatomy_p(1, 2), anatomy_p(1, 4); ... % 1: Medial Forefoot
-    anatomy_p(2, 2), anatomy_p(2, 4); ... % 2: Lateral Forefoot
+    anatomy_p(1, 2), anatomy_p(1, 4); ... % 1: Medial Forefoot (MT1)
+    anatomy_p(2, 2), anatomy_p(2, 4); ... % 2: Lateral Forefoot (MT4-5)
     anatomy_p(1, 1), anatomy_p(1, 3); ... % 3: Medial Heel
     anatomy_p(2, 1), anatomy_p(2, 3); ... % 4: Lateral Heel
-    anatomy_p(3, 2), anatomy_p(3, 4); ... % 5: Toe Apex
-    anatomy_p(3, 1), anatomy_p(3, 3)      % 6: Heel Base
+    anatomy_p(3, 2), anatomy_p(3, 4); ... % 5: Toe Midline (2-3)
+    anatomy_p(3, 1), anatomy_p(3, 3); ... % 6: Heel Midline (11-12)
+    cross_hx,        cross_hy              % 7: Lateral Cross (Block 8 & 4 Tilt)
 ];
 
 handle_names = {
@@ -147,8 +157,9 @@ handle_names = {
     'Lateral Forefoot (MT4-5)';
     'Medial Heel';
     'Lateral Heel';
-    'Toe Apex (Hallux)';
-    'Heel Base'
+    'Toe Midline (Between 2 & 3)';
+    'Heel Midline (Between 11 & 12)';
+    'Lateral Cross (Tilt of Block 8 & 4)'
 };
 
 selected_handle_idx = -1;
@@ -196,9 +207,10 @@ inst_str = sprintf(['INSTRUCTIONS:\n', ...
                     '• Click and DRAG any CIRCLE handle on the footprint to adjust.\n', ...
                     '• 12-Boxes update in real-time!\n', ...
                     '• Handles:\n', ...
-                    '  🔴 Cyan Circle : Medial/Lateral Forefoot\n', ...
-                    '  🟡 Yellow Circle: Medial/Lateral Heel\n', ...
-                    '  🟢 Green Circle : Toe Apex / Heel Base']);
+                    '  🔴 Cyan Circle   : Medial/Lateral Forefoot\n', ...
+                    '  🟡 Yellow Circle : Medial/Lateral Heel\n', ...
+                    '  🟢 Green Circle  : Midline (Toe 2-3 & Heel 11-12)\n', ...
+                    '  🟣 Magenta Circle: Lateral Cross (Tilt of Block 8 & 4)']);
 uicontrol(hCurFig, 'Style', 'text', 'String', inst_str, ...
           'Units', 'pixels', 'Position', [660, 440, 230, 150], ...
           'FontName', 'Segoe UI', 'FontSize', 8.5, 'BackgroundColor', [0.96, 0.97, 0.99], ...
@@ -247,13 +259,18 @@ redraw_plot();
         dists = sqrt((handles_xy(:, 1) - mx).^2 + (handles_xy(:, 2) - my).^2);
         [min_d, idx] = min(dists);
         
-        if min_d <= 3.5
+        if min_d <= 3.8
             selected_handle_idx = idx;
-            set(hTxtHandleInfo, 'String', sprintf('Active Handle:\n[#%d] %s', idx, handle_names{idx}), ...
-                'ForegroundColor', [0.1, 0.4, 0.8]);
+            if idx == 7
+                set(hTxtHandleInfo, 'String', sprintf('Active Handle:\n[#7] %s\n(Drag UP/DOWN to tilt Block 8 & 4)', handle_names{idx}), ...
+                    'ForegroundColor', [0.85, 0.15, 0.65]);
+            else
+                set(hTxtHandleInfo, 'String', sprintf('Active Handle:\n[#%d] %s', idx, handle_names{idx}), ...
+                    'ForegroundColor', [0.1, 0.4, 0.8]);
+            end
         else
             selected_handle_idx = -1;
-            set(hTxtHandleInfo, 'String', 'Active Handle: (None)', 'ForegroundColor', [0.5, 0.5, 0.5]);
+            set(hTxtHandleInfo, 'String', 'Active Handle: (None - Drag circles on foot)', 'ForegroundColor', [0.5, 0.5, 0.5]);
         end
     end
 
@@ -262,9 +279,25 @@ redraw_plot();
             cp = get(hAx, 'CurrentPoint');
             mx = cp(1, 1); my = cp(1, 2);
             
-            % Update handle position
-            handles_xy(selected_handle_idx, 1) = max(-10, min(n_wid + 10, mx));
-            handles_xy(selected_handle_idx, 2) = max(-5, min(n_len + 10, my));
+            if selected_handle_idx == 7
+                % Handle 7: Lateral Cross (Block 8 & 4 Tilt Intersection)
+                % Constrain along Line B (Lateral Boundary between Heel and Forefoot)
+                p_b1 = handles_xy(4, :); % Lateral Heel
+                p_b2 = handles_xy(2, :); % Lateral Forefoot
+                v_b = p_b2 - p_b1;
+                if abs(v_b(2)) > 1e-6
+                    t_b = (my - p_b1(2)) / v_b(2);
+                    t_b = max(0.2, min(1.6, t_b));
+                    handles_xy(7, 1) = p_b1(1) + t_b * v_b(1);
+                    handles_xy(7, 2) = p_b1(2) + t_b * v_b(2);
+                else
+                    handles_xy(7, 1) = mx;
+                    handles_xy(7, 2) = my;
+                end
+            else
+                handles_xy(selected_handle_idx, 1) = max(-10, min(n_wid + 10, mx));
+                handles_xy(selected_handle_idx, 2) = max(-5, min(n_len + 10, my));
+            end
             
             redraw_plot();
         end
@@ -287,24 +320,27 @@ redraw_plot();
 
     function on_reset_auto(~, ~)
         auto_p = compute_auto_anatomy(map_level_max, is_foot_right);
+        init_box = compute_boxes_from_anatomy(auto_p, [30, 20, 20]);
         handles_xy = [
-            auto_p(1, 2), auto_p(1, 4); ...
-            auto_p(2, 2), auto_p(2, 4); ...
-            auto_p(1, 1), auto_p(1, 3); ...
-            auto_p(2, 1), auto_p(2, 3); ...
-            auto_p(3, 2), auto_p(3, 4); ...
-            auto_p(3, 1), auto_p(3, 3)
+            auto_p(1, 2), auto_p(1, 4); ... % 1: Medial Forefoot
+            auto_p(2, 2), auto_p(2, 4); ... % 2: Lateral Forefoot
+            auto_p(1, 1), auto_p(1, 3); ... % 3: Medial Heel
+            auto_p(2, 1), auto_p(2, 3); ... % 4: Lateral Heel
+            auto_p(3, 2), auto_p(3, 4); ... % 5: Toe Midline (2-3)
+            auto_p(3, 1), auto_p(3, 3); ... % 6: Heel Midline (11-12)
+            init_box(8, 1), init_box(8, 2)  % 7: Lateral Cross (Block 8 & 4 Tilt)
         ];
         redraw_plot();
     end
 
     function on_save_curation(~, ~)
-        % Build curated anatomy_p
+        % Build curated anatomy_p (5 rows)
         cur_anatomy = [
             handles_xy(3, 1), handles_xy(1, 1), handles_xy(3, 2), handles_xy(1, 2); ... % Medial Line
             handles_xy(4, 1), handles_xy(2, 1), handles_xy(4, 2), handles_xy(2, 2); ... % Lateral Line
-            handles_xy(6, 1), handles_xy(5, 1), handles_xy(6, 2), handles_xy(5, 2); ... % Foot Axis
-            (handles_xy(1, 1)+handles_xy(2, 1))/2, (handles_xy(1, 2)+handles_xy(2, 2))/2, 0.23, 0.23
+            handles_xy(6, 1), handles_xy(5, 1), handles_xy(6, 2), handles_xy(5, 2); ... % Foot Midline
+            (handles_xy(1, 1)+handles_xy(2, 1))/2, (handles_xy(1, 2)+handles_xy(2, 2))/2, 0.23, 0.23; ...
+            handles_xy(7, 1), handles_xy(7, 2), 0, 0
         ];
         
         % Save anatomy_p
@@ -333,6 +369,12 @@ redraw_plot();
             center_y = (current_box(i, 4) + current_box(i, 6)) / 2;
             text(center_x, center_y, 90, text_list(i, 1:2), 'BackgroundColor', box_color(i, :), 'fontsize', 8, 'FontWeight', 'bold', 'HorizontalAlignment', 'center');
         end
+        
+        [~, geom_debug] = compute_boxes_from_anatomy(cur_anatomy, ratio_c);
+        plot3(geom_debug.mid_x, geom_debug.mid_y, [93, 93, 93, 93, 93], 'k-', 'LineWidth', 2.2); hold on;
+        plot3(geom_debug.mid_x, geom_debug.mid_y, [94, 94, 94, 94, 94], 'k^', 'LineWidth', 1.5, 'MarkerSize', 5); hold on;
+        plot3(geom_debug.cross_x, geom_debug.cross_y, [93, 93], 'k--', 'LineWidth', 2.0); hold on;
+        plot3(geom_debug.cross_x, geom_debug.cross_y, [94, 94], 'ksquare', 'LineWidth', 2, 'MarkerSize', 6); hold on;
         
         x_text = -10; y_text = 30; y_space = -2;
         for i = 1:12
@@ -364,10 +406,11 @@ redraw_plot();
             handles_xy(3, 1), handles_xy(1, 1), handles_xy(3, 2), handles_xy(1, 2); ...
             handles_xy(4, 1), handles_xy(2, 1), handles_xy(4, 2), handles_xy(2, 2); ...
             handles_xy(6, 1), handles_xy(5, 1), handles_xy(6, 2), handles_xy(5, 2); ...
-            (handles_xy(1, 1)+handles_xy(2, 1))/2, (handles_xy(1, 2)+handles_xy(2, 2))/2, 0.23, 0.23
+            (handles_xy(1, 1)+handles_xy(2, 1))/2, (handles_xy(1, 2)+handles_xy(2, 2))/2, 0.23, 0.23; ...
+            handles_xy(7, 1), handles_xy(7, 2), 0, 0
         ];
         
-        box = compute_boxes_from_anatomy(cur_p, ratio_c);
+        [box, geom_debug] = compute_boxes_from_anatomy(cur_p, ratio_c);
         current_box = box;
         
         % Draw 12 boxes
@@ -387,13 +430,22 @@ redraw_plot();
         plot3(handles_xy(1:2, 1), handles_xy(1:2, 2), [95, 95], 'co', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 0.9, 0.9]);
         % Heel handles (Yellow)
         plot3(handles_xy(3:4, 1), handles_xy(3:4, 2), [95, 95], 'yo', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [1, 1, 0]);
-        % Apex & Base handles (Green)
+        % Midline handles (Green)
         plot3(handles_xy(5:6, 1), handles_xy(5:6, 2), [95, 95], 'go', 'MarkerSize', 11, 'LineWidth', 2.5, 'MarkerFaceColor', [0, 1, 0]);
+        % Handle 7: Lateral Cross (Block 8 & 4 Tilt Intersection)
+        plot3(handles_xy(7, 1), handles_xy(7, 2), 96, 'mo', 'MarkerSize', 12, 'LineWidth', 2.5, 'MarkerFaceColor', [1.0, 0.2, 0.8]);
         
-        % Draw connecting axis lines
+        % Draw connecting boundary lines
         plot3([handles_xy(3, 1), handles_xy(1, 1)], [handles_xy(3, 2), handles_xy(1, 2)], [92, 92], 'y--', 'LineWidth', 1.2); % Medial Line
         plot3([handles_xy(4, 1), handles_xy(2, 1)], [handles_xy(4, 2), handles_xy(2, 2)], [92, 92], 'y--', 'LineWidth', 1.2); % Lateral Line
-        plot3([handles_xy(6, 1), handles_xy(5, 1)], [handles_xy(6, 2), handles_xy(5, 2)], [92, 92], 'k-', 'LineWidth', 1.8);  % Longitudinal Axis
+        
+        % 1. Central Vertical Midline (between 11-12, 9-10, 6-7, 2-3)
+        plot3(geom_debug.mid_x, geom_debug.mid_y, [93, 93, 93, 93, 93], 'k-', 'LineWidth', 2.2);
+        plot3(geom_debug.mid_x, geom_debug.mid_y, [94, 94, 94, 94, 94], 'k^', 'MarkerSize', 5, 'MarkerFaceColor', 'k');
+        
+        % 2. Horizontal Cross Line on Row 2 (Metatarsals 5, 6, 7, 8)
+        plot3(geom_debug.cross_x, geom_debug.cross_y, [93, 93], 'k--', 'LineWidth', 2.0);
+        plot3(geom_debug.cross_x, geom_debug.cross_y, [94, 94], 'ksquare', 'MarkerSize', 6, 'MarkerFaceColor', [0.2, 0.2, 0.2]);
         
         % Left legend
         x_text = -10; y_text = 30; y_space = -2;
@@ -483,7 +535,7 @@ function [anatomy_p] = compute_auto_anatomy(map_level_max, is_foot_right)
     ];
 end
 
-function [box] = compute_boxes_from_anatomy(anatomy_p, ratio_c)
+function [box, geom_debug] = compute_boxes_from_anatomy(anatomy_p, ratio_c)
     ratio_cc = [ratio_c(1), ratio_c(1)+ratio_c(2), ratio_c(1)+ratio_c(2)+ratio_c(3)];
     
     xy_lat_for  = [anatomy_p(2,2); anatomy_p(2,4)];
@@ -506,9 +558,20 @@ function [box] = compute_boxes_from_anatomy(anatomy_p, ratio_c)
     x_cm = [(x_a(1)+x_b(1))/2, (x_a(2)+x_b(2))/2];
     y_cm = [(y_a(1)+y_b(1))/2, (y_a(2)+y_b(2))/2];
     
-    ploy_a  = polyfit(x_a, y_a, 1);
-    ploy_b  = polyfit(x_b, y_b, 1);
-    ploy_cm = polyfit(x_cm, y_cm, 1);
+    % Direction vector of Central Line CM
+    v_cm = [x_cm(2) - x_cm(1), y_cm(2) - x_cm(1)];
+    if norm(v_cm) == 0
+        v_cm = [0, 1];
+    end
+    % Perpendicular normal to central line
+    n_cm = [-v_cm(2), v_cm(1)];
+    if norm(n_cm) > 0
+        n_cm = n_cm / norm(n_cm);
+    end
+    
+    % Direction vector of Line A (Medial) and Line B (Lateral)
+    v_a = [x_a(2) - x_a(1), y_a(2) - y_a(1)];
+    v_b = [x_b(2) - x_b(1), y_b(2) - y_b(1)];
     
     x_cd2_p = (x_ch_p - x_cd1_p)/3 + x_cd1_p;
     y_cd2_p = (y_ch_p - y_cd1_p)/3 + y_cd1_p;
@@ -522,27 +585,58 @@ function [box] = compute_boxes_from_anatomy(anatomy_p, ratio_c)
     x_vc_b = zeros(1, length(x_c)); y_vc_b = zeros(1, length(x_c));
     
     for i = 1:length(x_c)
-        constant_vc = ploy_cm(1)*y_c(i) + x_c(i);
-        ploy_vc = [-1/ploy_cm(1), constant_vc/ploy_cm(1)];
+        c_pt = [x_c(i), y_c(i)];
         
-        function_vc_a = [-ploy_a(1), 1; -ploy_vc(1), 1];
-        constant_vc_a = [ploy_a(2); ploy_vc(2)];
-        if abs(det(function_vc_a)) > 1e-12
-            vc_a = function_vc_a \ constant_vc_a;
+        % Robust Parametric Intersect with Line A (Medial):
+        p_a1 = [x_a(1), y_a(1)];
+        M_a = [v_a(1), -n_cm(1); v_a(2), -n_cm(2)];
+        rhs_a = [c_pt(1) - p_a1(1); c_pt(2) - p_a1(2)];
+        if abs(det(M_a)) > 1e-12
+            st_a = M_a \ rhs_a;
+            vc_a = p_a1 + st_a(1) * v_a;
         else
-            vc_a = [x_a(1); y_c(i)];
+            vc_a = [x_a(1), y_c(i)];
         end
         
-        function_vc_b = [-ploy_b(1), 1; -ploy_vc(1), 1];
-        constant_vc_b = [ploy_b(2); ploy_vc(2)];
-        if abs(det(function_vc_b)) > 1e-12
-            vc_b = function_vc_b \ constant_vc_b;
+        % Robust Parametric Intersect with Line B (Lateral):
+        p_b1 = [x_b(1), y_b(1)];
+        M_b = [v_b(1), -n_cm(1); v_b(2), -n_cm(2)];
+        rhs_b = [c_pt(1) - p_b1(1); c_pt(2) - p_b1(2)];
+        if abs(det(M_b)) > 1e-12
+            st_b = M_b \ rhs_b;
+            vc_b = p_b1 + st_b(1) * v_b;
         else
-            vc_b = [x_b(1); y_c(i)];
+            vc_b = [x_b(1), y_c(i)];
         end
         
         x_vc_a(i) = vc_a(1); y_vc_a(i) = vc_a(2);
         x_vc_b(i) = vc_b(1); y_vc_b(i) = vc_b(2);
+    end
+    
+    % Override lateral cross intersection if custom 5th row present in anatomy_p
+    if size(anatomy_p, 1) >= 5 && ~isnan(anatomy_p(5, 2)) && anatomy_p(5, 2) > 0
+        custom_cross_y = anatomy_p(5, 2);
+        p_b1 = [x_b(1), y_b(1)];
+        if abs(v_b(2)) > 1e-6
+            t_b = (custom_cross_y - p_b1(2)) / v_b(2);
+            x_vc_b(7) = p_b1(1) + t_b * v_b(1);
+            y_vc_b(7) = custom_cross_y;
+        else
+            x_vc_b(7) = anatomy_p(5, 1);
+            y_vc_b(7) = custom_cross_y;
+        end
+        
+        c_pt = [x_vc_b(7), y_vc_b(7)];
+        p_a1 = [x_a(1), y_a(1)];
+        M_a = [v_a(1), -n_cm(1); v_a(2), -n_cm(2)];
+        rhs_a = [c_pt(1) - p_a1(1); c_pt(2) - p_a1(2)];
+        if abs(det(M_a)) > 1e-12
+            st_a = M_a \ rhs_a;
+            vc_a = p_a1 + st_a(1) * v_a;
+            x_vc_a(7) = vc_a(1); y_vc_a(7) = vc_a(2);
+        else
+            x_vc_a(7) = x_a(2);  y_vc_a(7) = y_vc_b(7);
+        end
     end
     
     x_aa = [x_vc_a(4), x_vc_b(4)]; y_aa = [y_vc_a(4), y_vc_b(4)];
@@ -583,4 +677,11 @@ function [box] = compute_boxes_from_anatomy(anatomy_p, ratio_c)
     box(10, :) = [x_b_v(4), y_b_v(4), x_c_v(4), y_c_v(4), x_c_v(3), y_c_v(3), x_b_v(3), y_b_v(3)];
     box(11, :) = [x_c_v(3), y_c_v(3), x_a_v(3), y_a_v(3), x_a_v(1), y_a_v(1), x_c_v(1), y_c_v(1)];
     box(12, :) = [x_b_v(3), y_b_v(3), x_c_v(3), y_c_v(3), x_c_v(1), y_c_v(1), x_b_v(1), y_b_v(1)];
+    
+    if nargout > 1
+        geom_debug.mid_x = [x_c_v(1), x_c_v(3), x_c_v(4), x_3(2), x_t(2)];
+        geom_debug.mid_y = [y_c_v(1), y_c_v(3), y_c_v(4), y_3(2), y_t(2)];
+        geom_debug.cross_x = [x_vc_a(7), x_vc_b(7)];
+        geom_debug.cross_y = [y_vc_a(7), y_vc_b(7)];
+    end
 end

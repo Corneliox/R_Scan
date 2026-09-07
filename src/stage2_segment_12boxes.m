@@ -331,6 +331,32 @@ for w = 1:length(trial_tags)
         x_vc_b(i) = vc_b(1); y_vc_b(i) = vc_b(2);
     end
     
+    % Override lateral cross intersection if custom 5th row present in anatomy_p
+    if size(anatomy_p, 1) >= 5 && ~isnan(anatomy_p(5, 2)) && anatomy_p(5, 2) > 0
+        custom_cross_y = anatomy_p(5, 2);
+        p_b1 = [x_b(1), y_b(1)];
+        if abs(v_b(2)) > 1e-6
+            t_b = (custom_cross_y - p_b1(2)) / v_b(2);
+            x_vc_b(7) = p_b1(1) + t_b * v_b(1);
+            y_vc_b(7) = custom_cross_y;
+        else
+            x_vc_b(7) = anatomy_p(5, 1);
+            y_vc_b(7) = custom_cross_y;
+        end
+        
+        c_pt = [x_vc_b(7), y_vc_b(7)];
+        p_a1 = [x_a(1), y_a(1)];
+        M_a = [v_a(1), -n_cm(1); v_a(2), -n_cm(2)];
+        rhs_a = [c_pt(1) - p_a1(1); c_pt(2) - p_a1(2)];
+        if abs(det(M_a)) > 1e-12
+            st_a = M_a \ rhs_a;
+            vc_a = p_a1 + st_a(1) * v_a;
+            x_vc_a(7) = vc_a(1); y_vc_a(7) = vc_a(2);
+        else
+            x_vc_a(7) = x_a(2);  y_vc_a(7) = y_vc_b(7);
+        end
+    end
+    
     % Metatarsal transversal division (Level 4 to Level 5) from Medial to Lateral
     x_aa = [x_vc_a(4), x_vc_b(4)]; y_aa = [y_vc_a(4), y_vc_b(4)];
     x_bb = [x_vc_a(5), x_vc_b(5)]; y_bb = [y_vc_a(5), y_vc_b(5)];
@@ -396,7 +422,18 @@ for w = 1:length(trial_tags)
     plot3(x_cm(2), y_cm(2), [level_2, level_2], 'ksquare', 'linewidth', 2);
     plot3(x_vc_a, y_vc_a, z_vc, 'k-^', 'linewidth', 1); hold on;
     plot3(x_vc_b, y_vc_b, z_vc, 'k-^', 'linewidth', 1); hold on;
-    plot3([x_ch_p, x_ct_p], [y_ch_p, y_ct_p], [level_4, level_4], 'k-o', 'linewidth', 2); hold on;
+    
+    % Central Vertical Midline (between 11-12, 9-10, 6-7, 2-3)
+    mid_x = [x_c_v(1), x_c_v(3), x_c_v(4), x_3(2), x_t(2)];
+    mid_y = [y_c_v(1), y_c_v(3), y_c_v(4), y_3(2), y_t(2)];
+    plot3(mid_x, mid_y, [level_4, level_4, level_4, level_4, level_4], 'k-', 'linewidth', 2.2); hold on;
+    plot3(mid_x, mid_y, [level_4, level_4, level_4, level_4, level_4], 'k^', 'linewidth', 1.5, 'MarkerSize', 5); hold on;
+    
+    % Horizontal Cross Line on Row 2 (Metatarsals 5, 6, 7, 8)
+    cross_x = [x_vc_a(7), x_vc_b(7)];
+    cross_y = [y_vc_a(7), y_vc_b(7)];
+    plot3(cross_x, cross_y, [level_4, level_4], 'k--', 'linewidth', 2.0); hold on;
+    plot3([x_vc_a(7), x_vc_b(7)], [y_vc_a(7), y_vc_b(7)], [level_4, level_4], 'ksquare', 'linewidth', 2, 'MarkerSize', 6); hold on;
     
     for i = 1:length(x_vc_a)-1
         plot3([x_vc_a(i), x_vc_b(i)], [y_vc_a(i), y_vc_b(i)], [z_vc(i), z_vc(i)], 'c-^', 'linewidth', 2); hold on;
